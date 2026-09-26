@@ -89,14 +89,14 @@ async function parseEnvelope<T>(res: Response): Promise<Envelope<T>> {
 }
 
 export async function apiRequest<T>(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PATCH',
   path: string,
   opts: RequestOptions = {},
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   const token = tokenProvider()
   if (token) headers.Authorization = `Bearer ${token}`
-  if (method === 'POST') {
+  if (method === 'POST' || method === 'PATCH') {
     headers['Content-Type'] = 'application/json'
     headers['Idempotency-Key'] = idempotencyKey()
   }
@@ -107,7 +107,7 @@ export async function apiRequest<T>(
     res = await fetch(path + buildQuery(opts.query), {
       method,
       headers,
-      body: method === 'POST' ? JSON.stringify(opts.body ?? {}) : undefined,
+      body: method === 'POST' || method === 'PATCH' ? JSON.stringify(opts.body ?? {}) : undefined,
       signal: opts.signal,
     })
   } catch (err) {

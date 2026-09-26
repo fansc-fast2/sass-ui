@@ -196,3 +196,71 @@ export const markNotificationRead = (id: string) =>
 // GET /v1/activity-events —— activity.read（可见业务活动摘要）
 export const listActivityEvents = (query: { limit?: number; cursor?: string } = {}) =>
   apiRequest<PageList<ActivityEventItem>>('GET', '/v1/activity-events', { query })
+
+// ---- F1 成员治理 / 租户设置 / 用量 / 支持授权（Tenant 上下文） ----
+
+export interface TenantMember {
+  membership_id: string
+  subject_id: string
+  role: string
+  status: string
+  joined_at: string
+}
+
+export interface TenantInvitation {
+  id: string
+  tenant_id: string
+  invitee_login: string
+  role: string
+  status: string
+  expires_at: string
+  token?: string
+}
+
+export interface TenantUsageBucket {
+  scope_type: string
+  metric: string
+  period: string
+  limit: number
+  used: number
+  reserved: number
+}
+
+export interface TenantSupportGrant {
+  id: string
+  tenant_id: string
+  requested_by: string
+  approved_by: string
+  purpose: string
+  ticket: string
+  permission: string
+  status: string
+  can_decide: boolean
+}
+
+export const listTenantMembers = () =>
+  apiRequest<PageList<TenantMember>>('GET', '/v1/tenant/members')
+
+export const createTenantInvitation = (body: { invitee_login: string; role: string; ttl_hours?: number }) =>
+  apiRequest<TenantInvitation & { token: string }>('POST', '/v1/tenant/invitations', { body })
+
+export const revokeTenantInvitation = (id: string) =>
+  apiRequest<{ id: string; status: string }>('POST', `/v1/tenant/invitations/${encodeURIComponent(id)}/revoke`, { body: {} })
+
+export const updateTenantMember = (id: string, body: { role?: string; status?: string }) =>
+  apiRequest<{ membership_id: string; role: string; status: string }>('PATCH', `/v1/tenant/members/${encodeURIComponent(id)}`, { body })
+
+export const getTenantSettings = () =>
+  apiRequest<{ id: string; name: string; status: string; plan_id: string; row_version: number }>('GET', '/v1/tenant/settings')
+
+export const updateTenantSettings = (body: { name: string; expected_row_version: number }) =>
+  apiRequest<{ id: string; name: string; row_version: number }>('PATCH', '/v1/tenant/settings', { body })
+
+export const getTenantUsage = () =>
+  apiRequest<{ tenant_id: string; buckets: TenantUsageBucket[]; as_of: string }>('GET', '/v1/tenant/usage')
+
+export const listTenantSupportGrants = () =>
+  apiRequest<PageList<TenantSupportGrant>>('GET', '/v1/tenant/support-grants')
+
+export const decideSupportGrant = (id: string, approve: boolean) =>
+  apiRequest<{ id: string; status: string }>('POST', `/v1/tenant/support-grants/${encodeURIComponent(id)}/decisions`, { body: { approve } })
