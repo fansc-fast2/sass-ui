@@ -111,6 +111,45 @@ export const opsChangeTenantStatus = (id: string, status: string) =>
 export const opsListMembers = (id: string) =>
   opsRequest<{ items: OpsMember[]; next_cursor: string | null }>('GET', `/ops/v1/tenants/${encodeURIComponent(id)}/members`)
 
+// ---- F2 运营分析 ----
+
+export interface UsageRow {
+  tenant_id: string
+  tenant_name: string
+  status: string
+  metrics: { metric: string; unit: string; total: number; by_quality: Record<string, number>; event_count: number }[]
+  estimated_cost: number
+  currency: string
+  cost_is_estimate: boolean
+}
+
+export interface AuditEntryView {
+  id: number
+  actor: string
+  action: string
+  target: string
+  reason: string
+  at: string
+}
+
+export const opsUsageOverview = () =>
+  opsRequest<{ rows: UsageRow[]; as_of: string; note: string }>('GET', '/ops/v1/usage')
+
+export const opsCreateUsageExport = (tenantId: string) =>
+  opsRequest<{ operation_id: string; status: string; rows: number }>('POST', '/ops/v1/usage-exports', { tenant_id: tenantId || undefined })
+
+export const opsDownloadUsageExport = async (id: string): Promise<string> => {
+  const token = getOpsToken()
+  const res = await fetch(`/ops/v1/usage-exports/${encodeURIComponent(id)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) throw new OpsRequestError(res.status, 'DOWNLOAD_FAILED', `HTTP ${res.status}`, '')
+  return res.text()
+}
+
+export const opsSearchAudit = (query: { actor?: string; action?: string; target?: string } = {}) =>
+  opsRequest<{ items: AuditEntryView[]; total_matched: number }>('GET', '/ops/v1/audit' + qs(query))
+
 function qs(query: Record<string, string | undefined>): string {
   const sp = new URLSearchParams()
   for (const [k, v] of Object.entries(query)) if (v) sp.set(k, v)
