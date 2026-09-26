@@ -117,6 +117,10 @@ import type {
   ProductDetail,
   ProductSummary,
   SiteSummary,
+  TenantMember,
+  TenantInvitation,
+  TenantSupportGrant,
+  TenantUsageBucket,
 } from './types'
 
 // GET /v1/me/capabilities —— self.read（导航能力，展示用途）
@@ -198,45 +202,7 @@ export const listActivityEvents = (query: { limit?: number; cursor?: string } = 
   apiRequest<PageList<ActivityEventItem>>('GET', '/v1/activity-events', { query })
 
 // ---- F1 成员治理 / 租户设置 / 用量 / 支持授权（Tenant 上下文） ----
-
-export interface TenantMember {
-  membership_id: string
-  subject_id: string
-  role: string
-  status: string
-  joined_at: string
-}
-
-export interface TenantInvitation {
-  id: string
-  tenant_id: string
-  invitee_login: string
-  role: string
-  status: string
-  expires_at: string
-  token?: string
-}
-
-export interface TenantUsageBucket {
-  scope_type: string
-  metric: string
-  period: string
-  limit: number
-  used: number
-  reserved: number
-}
-
-export interface TenantSupportGrant {
-  id: string
-  tenant_id: string
-  requested_by: string
-  approved_by: string
-  purpose: string
-  ticket: string
-  permission: string
-  status: string
-  can_decide: boolean
-}
+// 类型（TenantMember/TenantInvitation/TenantUsageBucket/TenantSupportGrant）在 types.ts。
 
 export const listTenantMembers = () =>
   apiRequest<PageList<TenantMember>>('GET', '/v1/tenant/members')

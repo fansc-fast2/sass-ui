@@ -122,13 +122,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (!res.ok) throw new Error('session invalid')
         const data = (await res.json()) as { data: { items: Membership[] } }
         setMemberships(data.data.items)
-        // active 租户仍有效？
+        // active 租户仍有效？身份资料不持久化——重开页面只恢复租户上下文
         const act = sGet(ACTIVE_KEY)
         if (act) {
           const parsed = JSON.parse(act) as ActiveTenant
           if (data.data.items.some((m) => m.tenant_id === parsed.tenantId)) {
-            setIdentityUser({ id: parsed.tenantId, login: '', display_name: parsed.role })
-            setIdentityToken(tok)
             setActive(parsed)
           } else {
             sSet(ACTIVE_KEY, null)

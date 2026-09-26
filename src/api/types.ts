@@ -368,6 +368,50 @@ export interface PageList<T> {
   next_cursor: string | null
 }
 
+// v0.2 F1：配额桶用量视图。
+export interface TenantUsageBucket {
+  scope_type: string
+  metric: string
+  period: string
+  limit: number
+  used: number
+  reserved: number
+}
+
+// v0.2 F1：租户成员（GET /v1/tenant/members）。
+export interface TenantMember {
+  membership_id: string
+  subject_id: string
+  role: string
+  status: string
+  joined_at: string
+}
+
+// v0.2 F1：成员邀请（POST /v1/tenant/invitations；明文令牌仅创建响应出现一次）。
+export interface TenantInvitation {
+  id: string
+  tenant_id: string
+  invitee_login: string
+  role: string
+  status: string
+  expires_at: string
+  token?: string
+}
+
+// v0.2 F1：支持授权记录。
+export interface TenantSupportGrant {
+  id: string
+  tenant_id: string
+  requested_by: string
+  approved_by: string
+  purpose: string
+  ticket: string
+  permission: string
+  status: string
+  can_decide: boolean
+  session_expires_at: string | null
+}
+
 // v1.6 F05：提案列表返回摘要（含 product_ids/site_ids/created_at/expires_at）。
 export interface ChangeSetSummary {
   id: string
