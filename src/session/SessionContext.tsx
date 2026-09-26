@@ -59,7 +59,7 @@ const LADDER: Record<string, string[]> = {
 }
 
 function LADDER_PUBLISHER(): string[] {
-  return ['connection.read', 'knowledge.read', 'change.read', 'job.read', 'self.read', 'workspace.read', 'notification.read', 'activity.read', 'knowledge.sync', 'seo.audit', 'change.propose', 'knowledge.verify', 'change.authorize', 'change.execute', 'change.restore', 'job.cancel']
+  return ['connection.read', 'knowledge.read', 'change.read', 'job.read', 'self.read', 'workspace.read', 'notification.read', 'activity.read', 'knowledge.sync', 'seo.audit', 'change.propose', 'knowledge.verify', 'change.authorize', 'change.execute', 'change.restore', 'job.cancel', 'workspace.admin']
 }
 
 function sGet(key: string): string | null {

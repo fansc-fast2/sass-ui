@@ -1,0 +1,205 @@
+// 答案质量（SG02，24 §1）：型号/变体/市场一致性、声明逐条有证据、页面可见性、
+// 反虚构检查，以及摘要/问答候选。原则：无出处的声明零发布——界面明确标出
+// 被剔除的声明与证据引用（前端可定位事实）。
+
+import { useState } from 'react'
+import { listAnswerReviews, reviewAnswer } from '../api/api'
+import type { SeoAnswerReview, SeoClaimInput } from '../api/types'
+import { useSession } from '../session/SessionContext'
+import { useApiOperation } from '../state/useApiOperation'
+import {
+  Badge, Button, Card, EmptyState, ErrorBanner, Field, JsonView, MonoText, ResultRow, TextArea, TextInput,
+} from '../components/ui'
+
+const CHECK_STATUS_TONE: Record<string, 'ok' | 'warn' | 'err' | 'neutral'> = {
+  pass: 'ok',
+  flagged: 'warn',
+  unpublishable: 'err',
+  not_checked: 'neutral',
+}
+
+const CHECK_LABELS: Record<string, string> = {
+  'ANS-SCOPE-01': '范围一致性（型号/变体/市场/语言）',
+  'ANS-EVID-01': '声明出处（无出处零发布）',
+  'ANS-VIS-01': '页面可见性',
+  'ANS-FABR-01': '反虚构（JSON-LD 不越授权事实集）',
+}
+
+interface ClaimDraft extends Partial<SeoClaimInput> {
+  key: number
+}
+
+let claimKey = 0
+const newClaim = (): ClaimDraft => ({ key: ++claimKey, field: '', value: '', fact_id: '', source_ref: '' })
+
+export function AnswerQuality() {
+  const { hasScope } = useSession()
+  const { loading, error, run } = useApiOperation()
+
+  const [productId, setProductId] = useState('')
+  const [variantId, setVariantId] = useState('v1')
+  const [market, setMarket] = useState('DE')
+  const [locale, setLocale] = useState('de-DE')
+  const [model, setModel] = useState('')
+  const [pageUrl, setPageUrl] = useState('')
+  const [claims, setClaims] = useState<ClaimDraft[]>([newClaim()])
+  const [review, setReview] = useState<SeoAnswerReview | null>(null)
+  const [reviews, setReviews] = useState<SeoAnswerReview[]>([])
+  const [claimsText, setClaimsText] = useState('')
+
+  const canRead = hasScope('knowledge.read')
+
+  const submit = async () => {
+    const body = {
+      product_id: productId.trim(),
+      variant_id: variantId.trim() || undefined,
+      market: market.trim() || undefined,
+      locale: locale.trim() || undefined,
+      model: model.trim() || undefined,
+      page_url: pageUrl.trim() || undefined,
+      claims: claims
+        .filter((c) => c.field?.trim() && c.value?.trim())
+        .map((c) => ({
+          field: c.field!.trim(), value: c.value!, fact_id: c.fact_id?.trim() ?? '',
+          source_ref: c.source_ref?.trim() ?? '', fact_version: c.fact_version,
+        })),
+    }
+    const res = await run('POST', '/v1/seo/answer-reviews', () => reviewAnswer(body))
+    if (res) setReview(res.data)
+  }
+
+  const loadReviews = async () => {
+    const res = await run('GET', '/v1/seo/answer-reviews', () => listAnswerReviews())
+    if (res) setReviews(res.data.items)
+  }
+
+  const addFromText = () => {
+    // 批量导入：每行 field | value | fact_id | source_ref
+    const rows = claimsText.split('\n').map((l) => l.split('|').map((s) => s.trim())).filter((p) => p.length >= 2 && p[0])
+    if (rows.length === 0) return
+    setClaims((prev) => [...prev.filter((c) => c.field?.trim()), ...rows.map((p) => ({
+      key: ++claimKey, field: p[0], value: p[1], fact_id: p[2] ?? '', source_ref: p[3] ?? '',
+    }))])
+    setClaimsText('')
+  }
+
+  return (
+    <>
+      <ErrorBanner error={error} />
+      <Card
+        title="答案质量评审"
+        subtitle="SG02：从授权事实组装商品答案候选并核验；无出处的声明会被剔除（零发布），不会进入摘要/问答候选"
+      >
+        <div className="row gap wrap">
+          <Field label="商品 ID"><TextInput value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="prod-1" style={{ width: 160 }} /></Field>
+          <Field label="变体"><TextInput value={variantId} onChange={(e) => setVariantId(e.target.value)} style={{ width: 110 }} /></Field>
+          <Field label="市场"><TextInput value={market} onChange={(e) => setMarket(e.target.value)} style={{ width: 90 }} /></Field>
+          <Field label="语言"><TextInput value={locale} onChange={(e) => setLocale(e.target.value)} style={{ width: 120 }} /></Field>
+          <Field label="型号"><TextInput value={model} onChange={(e) => setModel(e.target.value)} placeholder="Trail Runner X" style={{ width: 180 }} /></Field>
+        </div>
+        <Field label="页面 URL（可选）" hint="提供后启用页面可见性与反虚构检查；必须能通过出站白名单">
+          <TextInput value={pageUrl} onChange={(e) => setPageUrl(e.target.value)} placeholder="http://127.0.0.1:1339/de/products/prod-1" />
+        </Field>
+
+        <div className="col gap">
+          {claims.map((c, i) => (
+            <div key={c.key} className="row gap wrap" style={{ alignItems: 'flex-end' }}>
+              <Field label={`声明 ${i + 1} · 字段`}>
+                <TextInput value={c.field ?? ''} onChange={(e) => setClaims((p) => p.map((x) => x.key === c.key ? { ...x, field: e.target.value } : x))} placeholder="material" style={{ width: 140 }} />
+              </Field>
+              <Field label="值">
+                <TextInput value={c.value ?? ''} onChange={(e) => setClaims((p) => p.map((x) => x.key === c.key ? { ...x, value: e.target.value } : x))} placeholder="recycled knit upper" style={{ width: 220 }} />
+              </Field>
+              <Field label="事实 ID">
+                <TextInput value={c.fact_id ?? ''} onChange={(e) => setClaims((p) => p.map((x) => x.key === c.key ? { ...x, fact_id: e.target.value } : x))} placeholder="f-1" style={{ width: 110 }} />
+              </Field>
+              <Field label="出处引用">
+                <TextInput value={c.source_ref ?? ''} onChange={(e) => setClaims((p) => p.map((x) => x.key === c.key ? { ...x, source_ref: e.target.value } : x))} placeholder="spec_sheet:v3#p2" style={{ width: 200 }} />
+              </Field>
+              <Button className="btn-xs" onClick={() => setClaims((p) => p.filter((x) => x.key !== c.key))}>移除</Button>
+            </div>
+          ))}
+          <div className="row gap">
+            <Button onClick={() => setClaims((p) => [...p, newClaim()])}>加一条声明</Button>
+            <Button variant="primary" disabled={!canRead || loading || !productId.trim()} onClick={() => void submit()}>
+              {loading ? '评审中…' : '提交评审'}
+            </Button>
+            <Button disabled={!canRead || loading} onClick={() => void loadReviews()}>刷新评审清单</Button>
+          </div>
+          {!canRead && <p className="muted">当前角色缺少 knowledge.read 权限。</p>}
+        </div>
+
+        <Field label="批量导入声明" hint="每行：字段 | 值 | 事实ID | 出处引用（后两项是证据，缺了会被零发布剔除）">
+          <TextArea rows={2} value={claimsText} onChange={(e) => setClaimsText(e.target.value)} placeholder={'model | Trail Runner X | f-1 | spec:v3#p1\nmaterial | recycled knit | f-2 | spec:v3#p2'} />
+        </Field>
+        <Button disabled={!claimsText.trim()} onClick={addFromText}>导入声明</Button>
+      </Card>
+
+      {review && (
+        <Card title="评审结果" subtitle={`scope 指纹 ${review.fingerprint.slice(0, 16)}…（同范围重复评审会刷新这条记录）`}>
+          <ResultRow label="覆盖率">
+            <Badge tone={review.coverage === 'complete' ? 'ok' : 'warn'}>
+              {review.coverage === 'complete' ? 'complete（页面已观测）' : 'partial（页面未观测/抓取失败）'}
+            </Badge>
+          </ResultRow>
+          <ResultRow label="声明统计">
+            <Badge tone={review.unpublishable_claims.length > 0 ? 'warn' : 'ok'}>
+              有证据 {review.evidenced_claims} 条 · 零发布剔除 {review.unpublishable_claims.length} 条
+            </Badge>
+          </ResultRow>
+          {review.unpublishable_claims.length > 0 && (
+            <ResultRow label="被剔除的声明">
+              <span className="muted">
+                {review.unpublishable_claims.map((c) => `${c.field}=${c.value}（缺 ${c.fact_id || 'fact_id'}/${c.source_ref || 'source_ref'}）`).join('；')}
+              </span>
+            </ResultRow>
+          )}
+          <ResultRow label="摘要候选"><span>{review.summary || '（无有证据声明，摘要为空）'}</span></ResultRow>
+
+          <table className="table">
+            <thead><tr><th>检查项</th><th>字段</th><th>结果</th><th>观察</th><th>证据</th></tr></thead>
+            <tbody>
+              {review.checks.map((c, i) => (
+                <tr key={i}>
+                  <td title={c.check_id}>{CHECK_LABELS[c.check_id] ?? c.check_id}</td>
+                  <td><MonoText>{c.field}</MonoText></td>
+                  <td><Badge tone={CHECK_STATUS_TONE[c.status] ?? 'neutral'}>{c.status}</Badge></td>
+                  <td className="muted" style={{ maxWidth: 320, overflowWrap: 'anywhere' }}>{c.observed}</td>
+                  <td><MonoText>{c.evidence_ref.length > 28 ? c.evidence_ref.slice(0, 28) + '…' : c.evidence_ref}</MonoText></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <ResultRow label="问答候选"><Badge tone="neutral">{review.qa_candidates.length} 条（仅供人工审核，不直接发布）</Badge></ResultRow>
+          {review.qa_candidates.length > 0 && <JsonView value={review.qa_candidates} label="问答候选" />}
+        </Card>
+      )}
+
+      {reviews.length > 0 && (
+        <Card title="历史评审" subtitle="按 scope（商品/变体/市场/语言）去重后的最近评审">
+          <table className="table">
+            <thead><tr><th>商品</th><th>变体</th><th>市场</th><th>有证据</th><th>零发布</th><th>覆盖</th><th>时间</th></tr></thead>
+            <tbody>
+              {reviews.map((r) => (
+                <tr key={r.fingerprint}>
+                  <td><MonoText>{r.product_id}</MonoText></td>
+                  <td>{r.variant_id || '—'}</td>
+                  <td>{r.market || '—'}</td>
+                  <td>{r.evidenced_claims}</td>
+                  <td>{r.unpublishable_claims.length}</td>
+                  <td><Badge tone={r.coverage === 'complete' ? 'ok' : 'warn'}>{r.coverage}</Badge></td>
+                  <td className="muted">{new Date(r.checked_at).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      {review === null && reviews.length === 0 && (
+        <EmptyState text="还没有评审——填一条带证据的声明（如 model | 型号值 | fact id | 出处）并提交试试" />
+      )}
+    </>
+  )
+}

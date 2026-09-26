@@ -11,10 +11,14 @@ import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
 import { SeoIssues } from './SeoIssues'
+import { SiteSeo } from './SiteSeo'
+import { AnswerQuality } from './AnswerQuality'
 import { Proposals } from './Proposals'
 
 const TABS = [
   { key: 'issues', label: '问题', perm: 'knowledge.read' },
+  { key: 'siteseo', label: '站内 SEO', perm: 'knowledge.read' },
+  { key: 'answers', label: '答案质量', perm: 'knowledge.read' },
   { key: 'proposals', label: '提案', perm: 'change.read' },
   { key: 'results', label: '效果', perm: 'job.read' },
 ] as const
@@ -35,6 +39,8 @@ export function OptimizationPage() {
         ))}
       </div>
       {tab === 'issues' && <SeoIssues />}
+      {tab === 'siteseo' && <SiteSeo />}
+      {tab === 'answers' && <AnswerQuality />}
       {tab === 'proposals' && <Proposals />}
       {tab === 'results' && <ResultsTab />}
     </div>

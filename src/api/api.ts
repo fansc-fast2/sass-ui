@@ -230,3 +230,40 @@ export const listTenantSupportGrants = () =>
 
 export const decideSupportGrant = (id: string, approve: boolean) =>
   apiRequest<{ id: string; status: string }>('POST', `/v1/tenant/support-grants/${encodeURIComponent(id)}/decisions`, { body: { approve } })
+
+// ---- SG01/SG02 站内 SEO 检测（Tenant 上下文；/v1/seo/* 不属于 31 契约操作） ----
+// 类型（SeoFinding/SeoScanResult/SeoAnswerReview 等）在 types.ts。
+
+import type {
+  SeoAnswerReview,
+  SeoAnswerReviewBody,
+  SeoAnswerReviewList,
+  SeoFinding,
+  SeoFindingList,
+  SeoScanBody,
+  SeoScanResult,
+} from './types'
+
+// POST /v1/seo/scans —— 同步触发站内扫描（有界：URL 数有上限）
+export const runSeoScan = (body: SeoScanBody) =>
+  apiRequest<SeoScanResult>('POST', '/v1/seo/scans', { body })
+
+// GET /v1/seo/findings —— findings 清单（rule_id 可选筛选）
+export const listSeoFindings = (query: { rule_id?: string } = {}) =>
+  apiRequest<SeoFindingList>('GET', '/v1/seo/findings', { query })
+
+// POST /v1/seo/findings/{id}/status —— 复核状态流转（tenant_admin）
+export const setSeoFindingStatus = (fingerprint: string, status: 'dismissed' | 'open') =>
+  apiRequest<SeoFinding>('POST', `/v1/seo/findings/${encodeURIComponent(fingerprint)}/status`, { body: { status } })
+
+// POST /v1/seo/answer-reviews —— SG02 答案质量评审（page_url 可选，启用可见性检查）
+export const reviewAnswer = (body: SeoAnswerReviewBody) =>
+  apiRequest<SeoAnswerReview>('POST', '/v1/seo/answer-reviews', { body })
+
+// GET /v1/seo/answer-reviews —— 评审清单
+export const listAnswerReviews = () =>
+  apiRequest<SeoAnswerReviewList>('GET', '/v1/seo/answer-reviews')
+
+// GET /v1/seo/answer-reviews/{id} —— 单条评审（scope 指纹）
+export const getAnswerReview = (fingerprint: string) =>
+  apiRequest<SeoAnswerReview>('GET', `/v1/seo/answer-reviews/${encodeURIComponent(fingerprint)}`)

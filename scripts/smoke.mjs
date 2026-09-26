@@ -327,6 +327,83 @@ check('过期 row_version → VERSION_CONFLICT', staleTransition.status === 409 
 const auditCheck = await call('GET', '/health', { auth: false })
 check('平台审计采集（内存）', auditCheck.status === 200) // 采集本身经 platform 测试钉死
 
+// ---- 11. SG01/SG02 站内 SEO 检测（/v1/seo/*，Tenant 上下文会话） ----
+// 目标页面由本脚本临时监听：缺 meta description + 缺 alt，必中 META-02/ALT-01。
+const { default: http } = await import('node:http')
+const seoTarget = http.createServer((req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.end('<html><head><title>Smoke Product</title>'
+    + '<script type="application/ld+json">{"@type":"Product","name":"Smoke Product"}</script>'
+    + '</head><body><h1>Smoke Product</h1><p>upper: recycled knit</p><img src="/img/x.jpg"></body></html>')
+})
+await new Promise((resolve) => seoTarget.listen(0, '127.0.0.1', resolve))
+const targetURL = `http://127.0.0.1:${seoTarget.address().port}/products/smoke-1`
+
+const seoNoAuth = await call('GET', '/v1/seo/findings', { auth: false })
+check('SEO findings 无凭据 → 401', seoNoAuth.status === 401, `status=${seoNoAuth.status}`)
+
+const seoScan = await call('POST', '/v1/seo/scans', {
+  headers: { Authorization: `Bearer ${tenantToken}` },
+  body: {
+    site_id: 'site-smoke',
+    urls: [targetURL],
+    pages: { [targetURL]: { product_id: 'smoke-1', expected_publication: 'public' } },
+  },
+})
+check('POST /v1/seo/scans（SG01 同步扫描）', seoScan.status === 200
+  && data(seoScan)?.coverage === 'complete'
+  && (data(seoScan)?.findings ?? []).some((f) => f.rule_id === 'SEO-META-02')
+  && (data(seoScan)?.findings ?? []).some((f) => f.rule_id === 'SEO-ALT-01'),
+  `status=${seoScan.status} coverage=${data(seoScan)?.coverage} findings=${data(seoScan)?.total_findings}`)
+
+const seoList = await call('GET', '/v1/seo/findings', { headers: { Authorization: `Bearer ${tenantToken}` } })
+check('GET /v1/seo/findings', seoList.status === 200 && data(seoList)?.count >= 2,
+  `count=${data(seoList)?.count}`)
+
+const dismissFP = (data(seoScan)?.findings ?? []).find((f) => f.rule_id === 'SEO-META-02')?.fingerprint
+const seoDismissBad = await call('POST', `/v1/seo/findings/${dismissFP}/status`, {
+  headers: { Authorization: `Bearer ${tenantToken}` },
+  body: { status: 'whatever' },
+})
+check('非法复核状态 → 400', seoDismissBad.status === 400, `status=${seoDismissBad.status}`)
+
+const seoDismiss = await call('POST', `/v1/seo/findings/${dismissFP}/status`, {
+  headers: { Authorization: `Bearer ${tenantToken}` },
+  body: { status: 'dismissed' },
+})
+check('POST findings/{id}/status（tenant_admin 豁免）', seoDismiss.status === 200 && data(seoDismiss)?.status === 'dismissed',
+  `status=${seoDismiss.status}`)
+
+const seoReview = await call('POST', '/v1/seo/answer-reviews', {
+  headers: { Authorization: `Bearer ${tenantToken}` },
+  body: {
+    product_id: 'smoke-1', variant_id: 'v1', market: 'DE', locale: 'de-DE', model: 'Smoke Product',
+    claims: [
+      { field: 'model', value: 'Smoke Product', fact_id: 'f-1', source_ref: 'spec:v1#p1' },
+      { field: 'material', value: 'recycled knit', fact_id: 'f-2', source_ref: 'spec:v1#p2' },
+      { field: 'certification', value: 'OEKO-TEX 100' },
+    ],
+    page_url: targetURL,
+  },
+})
+check('POST /v1/seo/answer-reviews（SG02 评审，无出处零发布）', seoReview.status === 200
+  && data(seoReview)?.evidenced_claims === 2
+  && data(seoReview)?.unpublishable_claims?.length === 1
+  && !String(data(seoReview)?.summary).includes('OEKO-TEX'),
+  `evidenced=${data(seoReview)?.evidenced_claims} unpublishable=${data(seoReview)?.unpublishable_claims?.length}`)
+
+const seoReviewGet = await call('GET', `/v1/seo/answer-reviews/${data(seoReview)?.fingerprint}`, {
+  headers: { Authorization: `Bearer ${tenantToken}` },
+})
+check('GET /v1/seo/answer-reviews/{id}', seoReviewGet.status === 200 && data(seoReviewGet)?.product_id === 'smoke-1',
+  `status=${seoReviewGet.status}`)
+
+const seoReviewList = await call('GET', '/v1/seo/answer-reviews', { headers: { Authorization: `Bearer ${tenantToken}` } })
+check('GET /v1/seo/answer-reviews', seoReviewList.status === 200 && data(seoReviewList)?.count >= 1,
+  `count=${data(seoReviewList)?.count}`)
+
+seoTarget.close()
+
 // ---- 汇总 ----
 console.log(`\n${failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`}`)
 process.exit(failures === 0 ? 0 : 1)

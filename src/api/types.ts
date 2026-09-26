@@ -424,3 +424,129 @@ export interface ChangeSetSummary {
   created_at: string
   expires_at: string | null
 }
+
+// ---- SG01/SG02 站内 SEO 检测（24 §6：优化中心站内 SEO/答案质量视图） ----
+
+/** SG01 单条检测结果（12 条规则目录的观察记录）。 */
+export interface SeoFinding {
+  fingerprint: string
+  rule_id: string
+  rule_version: string
+  subject: string
+  field: string
+  scope: string
+  severity: string
+  expected: string
+  observed: string
+  evidence_ref: string
+  coverage: string
+  status: string
+  fetch_status: string
+  checked_at: string
+  first_seen_at: string
+  last_seen_at: string
+}
+
+export interface SeoFindingList {
+  items: SeoFinding[]
+  count: number
+}
+
+/** 扫描请求：URL 必须能通过出站白名单（PK_ALLOWED_PUBLIC_HOSTS / dev egress）。 */
+export interface SeoScanPageScope {
+  product_id?: string
+  variant_id?: string
+  market?: string
+  locale?: string
+  expected_publication?: 'public' | 'private'
+  require_canonical?: boolean
+  domain_allowlist?: string[]
+  canonical_target_hosts?: string[]
+  expected_name?: string
+  expected_description?: string
+}
+
+export interface SeoScanBody {
+  site_id: string
+  urls: string[]
+  pages?: Record<string, SeoScanPageScope>
+}
+
+export interface SeoScanPageResult {
+  url: string
+  fetch_status: string
+  http_status: number
+  observations: number
+  findings_count: number
+  error: string
+}
+
+export interface SeoScanResult {
+  coverage: string
+  total_pages: number
+  total_findings: number
+  skipped_count: number
+  started_at: string
+  completed_at: string
+  pages: SeoScanPageResult[]
+  findings: SeoFinding[]
+}
+
+/** SG02 声明输入：每条授权声明必须带 fact_id + source_ref（无出处零发布）。 */
+export interface SeoClaimInput {
+  field: string
+  value: string
+  fact_id: string
+  source_ref: string
+  fact_version?: string
+}
+
+export interface SeoAnswerReviewBody {
+  product_id: string
+  variant_id?: string
+  market?: string
+  locale?: string
+  model?: string
+  claims: SeoClaimInput[]
+  page_url?: string
+  domain_allowlist?: string[]
+}
+
+export interface SeoAnswerCheck {
+  check_id: string
+  status: string
+  severity: string
+  field: string
+  scope: string
+  expected: string
+  observed: string
+  evidence_ref: string
+  checked_at: string
+}
+
+export interface SeoQACandidate {
+  question: string
+  answer: string
+  field: string
+  evidence_ref: string
+}
+
+export interface SeoAnswerReview {
+  fingerprint: string
+  product_id: string
+  variant_id: string
+  market: string
+  locale: string
+  checks: SeoAnswerCheck[]
+  evidenced_claims: number
+  unpublishable_claims: { field: string; value: string; fact_id: string; source_ref: string }[]
+  summary: string
+  qa_candidates: SeoQACandidate[]
+  coverage: string
+  checked_at: string
+}
+
+export interface SeoAnswerReviewList {
+  items: SeoAnswerReview[]
+  count: number
+}
