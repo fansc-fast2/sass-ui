@@ -1,14 +1,14 @@
-// 应用壳（TenantShell，19 §2）：侧栏顶部当前租户/切换，主导航六入口，
-// 底部导航设置；顶栏健康灯与账号。租户是全局安全边界，切换立即取消旧请求。
+// 应用壳（TenantShell，v0.2 §3）：Identity 登录 → 选租户（权威 memberships）
+// → TenantContext 会话。主导航六入口 + 底部设置；平台运营面在 /ops（双 shell）。
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { getHealth } from './api/client'
 import { useSession } from './session/SessionContext'
 import { ROLE_LABELS } from './session/permissions'
 import { AppStateProvider, useAppState } from './state/AppStateContext'
 import type { PageKey } from './state/AppStateContext'
-import { useTenantRegistry } from './tenants/registry'
 import { Badge, Button, Select } from './components/ui'
+import { LoginFlow } from './components/LoginFlow'
 import { OverviewPage } from './pages/OverviewPage'
 import { AiWorkspacePage } from './pages/AiWorkspacePage'
 import { ProductsPage } from './pages/ProductsPage'
@@ -19,9 +19,7 @@ import { OptimizationPage } from './pages/OptimizationPage'
 import { TasksPage } from './pages/TasksPage'
 import { SettingsPage } from './pages/SettingsPage'
 
-// v1.6 信息架构（22 §2 交付切片 + contracts/navigation.json）：
-// M2a 核心入口在前（商品/站点/优化/任务），M2b 体验增强（工作台/AI）在后并可按能力隐藏；
-// 关闭工作台时默认进入首个可访问的已实现业务页。
+// v1.8 信息架构（22 §2 交付切片）：M2a 核心入口在前，M2b 体验增强后移。
 const PRIMARY_NAV: { key: PageKey; label: string; desc: string; tag?: string }[] = [
   { key: 'products', label: '商品与知识', desc: '商品目录 · 知识 · 证据' },
   { key: 'sites', label: '站点与渠道', desc: '站点 · 连接状态' },
@@ -32,7 +30,7 @@ const PRIMARY_NAV: { key: PageKey; label: string; desc: string; tag?: string }[]
 ]
 
 const FOOTER_NAV: { key: PageKey; label: string; desc: string; tag?: string }[] = [
-  { key: 'settings', label: '设置', desc: '租户 · 凭据 · 接口' },
+  { key: 'settings', label: '设置', desc: '身份 · 成员 · 接口' },
 ]
 
 const PAGE_META = new Map([...PRIMARY_NAV, ...FOOTER_NAV, {
@@ -42,11 +40,10 @@ const PAGE_META = new Map([...PRIMARY_NAV, ...FOOTER_NAV, {
 }].map((i) => [i.key, i]))
 
 function Shell() {
-  const { session, save, clear } = useSession()
-  const { tenants, upsert } = useTenantRegistry()
+  const { active, memberships, selectTenant, logout } = useSession()
   const { page, navigate, health, setHealth } = useAppState()
+  const [showLogin, setShowLogin] = useState(false)
 
-  // 健康轮询：顶栏指示灯
   useEffect(() => {
     let alive = true
     const ping = async () => {
@@ -66,21 +63,6 @@ function Shell() {
     }
   }, [setHealth])
 
-  // 当前会话的租户若不在注册表（历史 localStorage 凭据），自动补登记
-  useEffect(() => {
-    if (!session) return
-    if (!tenants.some((t) => t.tenant === session.tenant)) {
-      upsert({ tenant: session.tenant, actor: session.actor, role: session.role, sites: session.sites })
-    }
-  }, [session, tenants, upsert])
-
-  const switchTenant = (tenant: string) => {
-    const entry = tenants.find((t) => t.tenant === tenant)
-    if (!entry) return
-    upsert(entry) // 刷新 lastUsedAt
-    save({ tenant: entry.tenant, actor: entry.actor, role: entry.role, sites: entry.sites })
-  }
-
   const meta = PAGE_META.get(page)
 
   return (
@@ -93,18 +75,21 @@ function Shell() {
             <div className="brand-sub">租户商品知识与 SEO 优化</div>
           </div>
         </div>
-        {session && (
+        {active && (
           <div className="tenant-box">
             <span className="nav-group-label">当前租户</span>
-            <Select value={session.tenant} onChange={(e) => switchTenant(e.target.value)}>
-              {tenants.some((t) => t.tenant === session.tenant)
+            <Select value={active.tenantId} onChange={(e) => {
+              const m = memberships.find((x) => x.tenant_id === e.target.value)
+              if (m) void selectTenant(m.membership_id)
+            }}>
+              {memberships.some((m) => m.tenant_id === active.tenantId)
                 ? null
-                : <option value={session.tenant}>{session.tenant}</option>}
-              {tenants.map((t) => (
-                <option key={t.tenant} value={t.tenant}>{t.tenant}</option>
+                : <option value={active.tenantId}>{active.tenantName}</option>}
+              {memberships.map((m) => (
+                <option key={m.membership_id} value={m.tenant_id}>{m.tenant_name}</option>
               ))}
             </Select>
-            <div className="muted">{session.actor} · {ROLE_LABELS[session.role]}</div>
+            <div className="muted">{active.role}</div>
           </div>
         )}
         <nav className="nav-groups">
@@ -136,14 +121,14 @@ function Shell() {
           </div>
         </nav>
         <div className="sidebar-foot">
-          platform-backend（Go）<br />devkit v1.6 · 31 个 /v1 操作
+          platform-backend（Go）<br />devkit v1.8 · 31 个 /v1 操作
         </div>
       </aside>
 
       <div className="main">
         <header className="topbar">
           <div>
-            <h1>{meta?.label ?? '工作台'}</h1>
+            <h1>{meta?.label ?? '商品与知识'}</h1>
             <p className="topbar-sub">{meta?.desc}</p>
           </div>
           <div className="topbar-right">
@@ -151,21 +136,26 @@ function Shell() {
               <span className={`health-dot ${health ? (health.ok ? 'up' : 'down') : ''}`} />
               {health ? (health.ok ? `服务正常 · ${health.ms}ms` : '服务不可达') : '检测中…'}
             </span>
-            {session ? (
+            {active ? (
               <>
-                <Badge tone="info">{ROLE_LABELS[session.role]}</Badge>
-                <span className="muted mono">{session.tenant} / {session.actor}</span>
+                <Badge tone="info">{ROLE_LABELS[active.role as keyof typeof ROLE_LABELS] ?? active.role}</Badge>
+                <span className="muted mono">{active.tenantName}</span>
                 <Button variant="ghost" onClick={() => navigate('settings')}>设置</Button>
-                <Button variant="ghost" onClick={clear}>退出</Button>
+                <Button variant="ghost" onClick={logout}>退出</Button>
               </>
             ) : (
               <>
-                <Badge tone="warn">未进入租户</Badge>
-                <Button variant="primary" onClick={() => navigate('settings')}>去设置</Button>
+                <Badge tone="warn">未选择租户</Badge>
+                <Button variant="primary" onClick={() => setShowLogin((v) => !v)}>登录</Button>
               </>
             )}
           </div>
         </header>
+        {showLogin && (
+          <div className="cred-drawer">
+            <LoginFlow onDone={() => setShowLogin(false)} />
+          </div>
+        )}
         <main className="content">
           {page === 'overview' && <OverviewPage />}
           {page === 'ai' && <AiWorkspacePage />}

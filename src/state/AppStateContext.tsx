@@ -106,9 +106,9 @@ const AppStateContext = createContext<AppStateContextValue | null>(null)
 let opSeq = 1
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  // SessionProvider 是本 Provider 的祖先，可以直接消费当前会话（租户上下文）。
-  const { session } = useSession()
-  const tenant = session?.tenant ?? ''
+  // SessionProvider 是本 Provider 的祖先；当前租户来自已交换的 TenantContext。
+  const { active } = useSession()
+  const tenant = active?.tenantId ?? ''
 
   // v1.6 22 §2：默认落地首个可访问的已实现业务页（商品与知识），工作台为 M2b 增强。
   const [page, setPage] = useState<PageKey>('products')

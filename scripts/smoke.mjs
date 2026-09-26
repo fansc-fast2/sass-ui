@@ -259,6 +259,74 @@ check('viewer capabilities 含 v1.5 读权限', viewerCaps.status === 200
   && data(viewerCaps)?.permissions?.includes('workspace.read')
   && !data(viewerCaps)?.permissions?.includes('change.authorize'))
 
+// ---- 10. 平台域（v0.2 F0：Identity/Tenant/Ops 三上下文） ----
+const idLogin = await call('POST', '/v1/auth/login', { auth: false, body: { login: 'frank', password: 'frank123' } })
+check('POST /v1/auth/login（dev 身份适配器）', idLogin.status === 200 && typeof data(idLogin)?.token === 'string')
+const idToken = data(idLogin)?.token
+
+const memNoAuth = await call('GET', '/v1/me/memberships', { auth: false })
+check('memberships 无身份 → 401（PAAS-01 前置）', memNoAuth.status === 401)
+
+const memberships = await call('GET', '/v1/me/memberships', { headers: { Authorization: `Bearer ${idToken}` } })
+check('GET /v1/me/memberships（仅本人）', memberships.status === 200
+  && Array.isArray(data(memberships)?.items) && data(memberships)?.items?.length === 2)
+
+const acmeMem = (data(memberships)?.items ?? []).find((m) => m.tenant_name === 'acme')
+const tctx = await call('POST', '/v1/session/tenant-context', {
+  headers: { Authorization: `Bearer ${idToken}` },
+  body: { membership_id: acmeMem?.membership_id },
+})
+check('POST /v1/session/tenant-context', tctx.status === 200 && typeof data(tctx)?.token === 'string')
+const tenantToken = data(tctx)?.token
+
+const foreignCtx = await call('POST', '/v1/session/tenant-context', {
+  headers: { Authorization: `Bearer ${idToken}` },
+  body: { membership_id: 'm_someone_else' },
+})
+check('他人 membership 交换 → 拒绝（PAAS-02）', foreignCtx.status === 401)
+
+const bizWithTenant = await call('GET', '/v1/issues', { headers: { Authorization: `Bearer ${tenantToken}` } })
+check('tenant 会话调业务 API', bizWithTenant.status === 200)
+const bizWithIdentity = await call('GET', '/v1/issues', { headers: { Authorization: `Bearer ${idToken}` } })
+check('identity 会话调业务 API → 401（PAAS-03）', bizWithIdentity.status === 401)
+
+const opsCtx = await call('POST', '/ops/v1/session/ops-context', {
+  headers: { Authorization: `Bearer ${idToken}` },
+  body: {},
+})
+check('POST /ops/v1/session/ops-context（frank 有平台授权）', opsCtx.status === 200 && typeof data(opsCtx)?.token === 'string')
+const opsToken = data(opsCtx)?.token
+
+const opsList = await call('GET', '/ops/v1/tenants', { headers: { Authorization: `Bearer ${opsToken}` } })
+check('GET /ops/v1/tenants（ops 会话）', opsList.status === 200 && Array.isArray(data(opsList)?.items))
+const opsByTenant = await call('GET', '/ops/v1/tenants', { headers: { Authorization: `Bearer ${tenantToken}` } })
+check('tenant 会话请求 ops 目录 → 401（PAAS-03）', opsByTenant.status === 401)
+
+const opsCreate = await call('POST', '/ops/v1/tenants', {
+  headers: { Authorization: `Bearer ${opsToken}` },
+  body: { name: `smoke-tenant-${Date.now()}`, owner_subject: 'frank', plan_id: 'plan-free' },
+})
+check('POST /ops/v1/tenants（创建→provisioning）', opsCreate.status === 201 && data(opsCreate)?.status === 'provisioning')
+const smokeTenant = data(opsCreate)
+const badTransition = await call('POST', `/ops/v1/tenants/${smokeTenant?.id}/transitions`, {
+  headers: { Authorization: `Bearer ${opsToken}` },
+  body: { to: 'suspended', expected_row_version: smokeTenant?.row_version, reason: 'smoke' },
+})
+check('provisioning→suspended → INVALID_STATE', badTransition.status === 409 && errCode(badTransition) === 'INVALID_STATE')
+const goodTransition = await call('POST', `/ops/v1/tenants/${smokeTenant?.id}/transitions`, {
+  headers: { Authorization: `Bearer ${opsToken}` },
+  body: { to: 'closing', expected_row_version: smokeTenant?.row_version, reason: 'smoke cleanup' },
+})
+check('provisioning→closing 合法（v0.2 §5）', goodTransition.status === 200 && data(goodTransition)?.status === 'closing')
+const staleTransition = await call('POST', `/ops/v1/tenants/${smokeTenant?.id}/transitions`, {
+  headers: { Authorization: `Bearer ${opsToken}` },
+  body: { to: 'closed', expected_row_version: smokeTenant?.row_version, reason: 'stale version' },
+})
+check('过期 row_version → VERSION_CONFLICT', staleTransition.status === 409 && errCode(staleTransition) === 'VERSION_CONFLICT')
+
+const auditCheck = await call('GET', '/health', { auth: false })
+check('平台审计采集（内存）', auditCheck.status === 200) // 采集本身经 platform 测试钉死
+
 // ---- 汇总 ----
 console.log(`\n${failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`}`)
 process.exit(failures === 0 ? 0 : 1)

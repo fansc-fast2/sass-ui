@@ -5,6 +5,12 @@
 恢复契约 `baseline=published_baseline`、PublicationCheck 证据契约（required/check_version/evidence_ref）、
 证据元数据分层（visibility）、navigation.json 信息架构与状态文案、22 章 M2a/M2b 交付切片。
 
+**平台化（PaaS 改造 v0.2 / ADR-17）**：同仓库双 shell——
+- 租户业务面（`/`）：Identity 登录 → 选租户（权威 memberships）→ TenantContext 会话调 31 操作；
+  会话凭据只存 sessionStorage（v0.2 §3.2）。
+- 平台运营面（`/ops`）：Identity 登录 → ops-context 交换（需平台角色授权）；租户目录/生命周期治理。
+  平台会话与租户会话受众隔离，互不可用。
+
 ## 技术栈
 
 Vite 7 + React 19 + TypeScript（标准库之外零运行时依赖），无第三方 UI 组件库。

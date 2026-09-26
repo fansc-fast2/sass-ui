@@ -8,13 +8,12 @@ import type { ActionItem, ActivityEventItem, JobItem, Overview } from '../api/ty
 import { JobStatusBadge, overviewCardValue } from '../components/StatusBadge'
 import { ListState } from '../components/ListState'
 import { ActionCard, Badge, Card, EmptyState, ErrorBanner, StatCard } from '../components/ui'
-import { ROLE_LABELS } from '../session/permissions'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
 
 export function OverviewPage() {
-  const { session } = useSession()
+  const { active, identityUser } = useSession()
   const { health, currentTenant, navigate, tenantChangeSets, tenantExecutions, tenantJobs } = useAppState()
   const { loading, error, run } = useApiOperation()
 
@@ -42,9 +41,9 @@ export function OverviewPage() {
     <div className="page">
       <ErrorBanner error={error} />
       <div className="welcome">
-        {session
-          ? <>你好，<strong>{session.actor}</strong>（{ROLE_LABELS[session.role]}）。当前租户 <strong>{currentTenant}</strong>。</>
-          : <>欢迎使用 Platform Console。先到「设置」新增并进入一个租户。</>}
+        {active
+          ? <>你好，<strong>{identityUser?.display_name ?? identityUser?.login ?? active.role}</strong>。当前租户 <strong>{currentTenant}</strong>。</>
+          : <>欢迎使用 Platform Console。先登录身份并选择租户（右上角「登录」）。</>}
       </div>
 
       <div className="stat-grid">
@@ -55,8 +54,8 @@ export function OverviewPage() {
         />
         <StatCard
           label="我的角色"
-          value={session ? ROLE_LABELS[session.role] : '未配置'}
-          sub={session ? `${currentTenant} / ${session.actor}` : '暂无凭据'}
+          value={active ? active.role : '未选择租户'}
+          sub={active ? `${currentTenant} · 按成员关系授权` : '暂无租户上下文'}
         />
         <StatCard label="本会话提案" value={tenantChangeSets.length} sub={`租户 ${currentTenant || '—'}`} />
         <StatCard label="本会话执行" value={tenantExecutions.length + tenantJobs.length} sub={`执行 ${tenantExecutions.length} · 任务 ${tenantJobs.length}`} />

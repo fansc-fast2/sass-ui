@@ -12,6 +12,7 @@ export default defineConfig({
     proxy: {
       '/health': { target: BACKEND, changeOrigin: false },
       '/v1': { target: BACKEND, changeOrigin: false },
+      '/ops/v1': { target: BACKEND, changeOrigin: false },
       '/integrations': { target: BACKEND, changeOrigin: false },
     },
   },
@@ -21,6 +22,7 @@ export default defineConfig({
     proxy: {
       '/health': { target: BACKEND, changeOrigin: false },
       '/v1': { target: BACKEND, changeOrigin: false },
+      '/ops/v1': { target: BACKEND, changeOrigin: false },
       '/integrations': { target: BACKEND, changeOrigin: false },
     },
   },

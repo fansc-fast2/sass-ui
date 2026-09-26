@@ -312,3 +312,16 @@ body {
   border-radius: 4px; padding: 0 4px; margin-left: 6px;
   vertical-align: 1px;
 }
+
+/* ===== /ops 平台运营面（逻辑隔离；独立会话上下文） ===== */
+.ops-boot { padding: 40px; color: var(--muted); }
+.ops-login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--sidebar-bg); }
+.ops-login {
+  background: var(--panel); border-radius: 12px; padding: 22px 24px;
+  width: 380px; display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+.ops-login .brand { color: var(--text); gap: 10px; }
+.ops-login strong { font-size: 16px; }
+.brand-mark.ops { background: linear-gradient(135deg, #0f766e, #0d9488); }
+.login-flow { display: flex; flex-direction: column; gap: 10px; }
