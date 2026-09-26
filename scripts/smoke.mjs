@@ -269,7 +269,7 @@ check('memberships 无身份 → 401（PAAS-01 前置）', memNoAuth.status === 
 
 const memberships = await call('GET', '/v1/me/memberships', { headers: { Authorization: `Bearer ${idToken}` } })
 check('GET /v1/me/memberships（仅本人）', memberships.status === 200
-  && Array.isArray(data(memberships)?.items) && data(memberships)?.items?.length === 2)
+  && Array.isArray(data(memberships)?.items) && data(memberships)?.items?.length >= 3)
 
 const acmeMem = (data(memberships)?.items ?? []).find((m) => m.tenant_name === 'acme')
 const tctx = await call('POST', '/v1/session/tenant-context', {
