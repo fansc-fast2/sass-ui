@@ -8,7 +8,7 @@ import { ROLE_LABELS } from './session/permissions'
 import { AppStateProvider, useAppState } from './state/AppStateContext'
 import type { PageKey } from './state/AppStateContext'
 import { Badge, Button, Select } from './components/ui'
-import { LoginFlow } from './components/LoginFlow'
+import { LoginModal } from './components/LoginModal'
 import { OverviewPage } from './pages/OverviewPage'
 import { AiWorkspacePage } from './pages/AiWorkspacePage'
 import { ProductsPage } from './pages/ProductsPage'
@@ -40,9 +40,14 @@ const PAGE_META = new Map([...PRIMARY_NAV, ...FOOTER_NAV, {
 }].map((i) => [i.key, i]))
 
 function Shell() {
-  const { active, memberships, selectTenant, logout } = useSession()
+  const { active, memberships, selectTenant, logout, identityUser, booted } = useSession()
   const { page, navigate, health, setHealth } = useAppState()
   const [showLogin, setShowLogin] = useState(false)
+
+  // 无身份会话（首次访问/退出登录）自动弹出登录框
+  useEffect(() => {
+    if (booted && !identityUser) setShowLogin(true)
+  }, [booted, identityUser])
 
   useEffect(() => {
     let alive = true
@@ -151,11 +156,7 @@ function Shell() {
             )}
           </div>
         </header>
-        {showLogin && (
-          <div className="cred-drawer">
-            <LoginFlow onDone={() => setShowLogin(false)} />
-          </div>
-        )}
+        {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
         <main className="content">
           {page === 'overview' && <OverviewPage />}
           {page === 'ai' && <AiWorkspacePage />}
