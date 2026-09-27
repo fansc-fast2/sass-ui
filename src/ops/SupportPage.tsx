@@ -8,6 +8,7 @@ import {
   opsRequestSupportGrant, opsRevokeSupportGrant,
 } from './opsClient'
 import type { SupportGrantView } from './opsClient'
+import { Modal } from '../components/Modal'
 
 const GRANT_TONES: Record<string, string> = {
   requested: 'badge-warn',
@@ -38,6 +39,7 @@ export default function SupportPage() {
   const [reqPurpose, setReqPurpose] = useState('')
   const [reqTicket, setReqTicket] = useState('')
   const [reqMsg, setReqMsg] = useState<string | null>(null)
+  const [showReq, setShowReq] = useState(false)
 
   const [session, setSession] = useState<{ grantId: string; token: string; expiresAt: string } | null>(null)
 
@@ -72,6 +74,7 @@ export default function SupportPage() {
       })
       setReqMsg(`已发起授权申请 ${g.id}（${g.status}）——等待租户管理员在租户侧审批`)
       setReqPurpose('')
+      setShowReq(false)
       await query()
     } catch (e) {
       setReqMsg(e instanceof Error ? e.message : String(e))
@@ -107,29 +110,45 @@ export default function SupportPage() {
 
       <div className="card">
         <div className="card-body">
-          <strong>发起支持授权</strong>
-          <p className="muted">
-            支持访问是"租户批准的例外"：申请后由租户管理员在租户侧审批，批准后才能建立
-            15 分钟只读会话；全程记入双方审计。租户可随时拒绝或撤销。
-          </p>
-          <div className="row gap wrap">
-            <select className="input select" style={{ width: 180 }} value={reqTenant} onChange={(e) => setReqTenant(e.target.value)}>
-              <option value="">选择租户…</option>
-              {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}（{t.id}）</option>)}
-            </select>
-            <input className="input" style={{ width: 260 }} placeholder="访问目的（必填）" value={reqPurpose} onChange={(e) => setReqPurpose(e.target.value)} />
-            <input className="input" style={{ width: 180 }} placeholder="关联工单号（必填）" value={reqTicket} onChange={(e) => setReqTicket(e.target.value)} />
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <div>
+              <strong>发起支持授权</strong>
+              <p className="muted" style={{ margin: '4px 0 0' }}>
+                支持访问是"租户批准的例外"：租户侧审批后才可建立 15 分钟只读会话，全程审计。
+              </p>
+            </div>
+            <button className="btn btn-primary" onClick={() => setShowReq(true)}>＋ 发起申请</button>
+          </div>
+          {reqMsg && <p className="muted">{reqMsg}</p>}
+        </div>
+      </div>
+
+      {showReq && (
+        <Modal title="发起支持授权" onClose={() => setShowReq(false)}>
+          <div className="col gap">
+            <label className="field"><span className="field-label">租户</span>
+              <select className="input select" value={reqTenant} onChange={(e) => setReqTenant(e.target.value)}>
+                <option value="">选择租户…</option>
+                {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}（{t.id}）</option>)}
+              </select></label>
+            <label className="field"><span className="field-label">访问目的（必填）</span>
+              <input className="input" value={reqPurpose} onChange={(e) => setReqPurpose(e.target.value)} placeholder="排查订单同步异常" /></label>
+            <label className="field"><span className="field-label">关联工单号（必填）</span>
+              <input className="input" value={reqTicket} onChange={(e) => setReqTicket(e.target.value)} placeholder="TICKET-1024" /></label>
             <button
               className="btn btn-primary"
               disabled={busy || !reqTenant || !reqPurpose.trim() || !reqTicket.trim()}
               onClick={() => void request()}
             >
-              发起申请
+              提交申请
             </button>
+            <p className="muted">
+              申请后由租户管理员在租户侧审批，批准后才能建立 15 分钟只读会话；
+              全程记入双方审计，租户可随时拒绝或撤销。
+            </p>
           </div>
-          {reqMsg && <p className="muted">{reqMsg}</p>}
-        </div>
-      </div>
+        </Modal>
+      )}
 
       {session && (
         <div className="card">

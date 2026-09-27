@@ -9,6 +9,7 @@ import {
   opsUsageOverview, opsCreateUsageExport, opsDownloadUsageExport, opsSearchAudit,
 } from './opsClient'
 import type { OpsTenant, UsageRow, AuditEntryView } from './opsClient'
+import { Modal } from '../components/Modal'
 import PluginsPage from './PluginsPage'
 import SupportPage from './SupportPage'
 
@@ -202,6 +203,7 @@ function TenantsPage() {
   const [createOwner, setCreateOwner] = useState('frank')
   const [createPlan, setCreatePlan] = useState('plan-free')
   const [createMsg, setCreateMsg] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
 
   const query = async () => {
     setBusy(true)
@@ -247,6 +249,7 @@ function TenantsPage() {
       const t = await opsCreateTenant({ name: createName.trim(), owner_actor: createOwner.trim(), plan_id: createPlan })
       setCreateMsg(`已创建 ${t.name}（${t.id}，${t.status}）`)
       setCreateName('')
+      setShowCreate(false)
       await query()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -293,6 +296,10 @@ function TenantsPage() {
       {error && <div className="banner banner-err">{error}</div>}
       <div className="card">
         <div className="card-body">
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <strong>租户目录</strong>
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>＋ 新增租户</button>
+          </div>
           <div className="row gap wrap">
             <input className="input" style={{ width: 180 }} placeholder="租户名称" value={q} onChange={(e) => setQ(e.target.value)} />
             <select className="input select" style={{ width: 150 }} value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -303,8 +310,9 @@ function TenantsPage() {
               <option value="closing">closing</option>
               <option value="closed">closed</option>
             </select>
-            <button className="btn btn-primary" disabled={busy} onClick={() => void query()}>{busy ? '查询中…' : '查询'}</button>
+            <button className="btn" disabled={busy} onClick={() => void query()}>{busy ? '查询中…' : '查询'}</button>
           </div>
+          {createMsg && <p className="muted">{createMsg}</p>}
           {tenants && tenants.length > 0 && (
             <table className="table">
               <thead><tr><th>租户</th><th>状态</th><th>套餐</th><th>Owner</th><th>成员数</th><th>创建时间</th><th></th></tr></thead>
@@ -327,21 +335,29 @@ function TenantsPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-body">
-          <strong>新增租户</strong>
-          <div className="row gap wrap">
-            <input className="input" style={{ width: 180 }} placeholder="租户名称" value={createName} onChange={(e) => setCreateName(e.target.value)} />
-            <input className="input" style={{ width: 140 }} placeholder="owner actor" value={createOwner} onChange={(e) => setCreateOwner(e.target.value)} />
-            <select className="input select" style={{ width: 140 }} value={createPlan} onChange={(e) => setCreatePlan(e.target.value)}>
-              <option value="plan-free">plan-free</option>
-              <option value="plan-pro">plan-pro</option>
-            </select>
-            <button className="btn btn-primary" disabled={busy || !createName.trim() || !createOwner.trim()} onClick={() => void create()}>创建（provisioning）</button>
+      {showCreate && (
+        <Modal title="新增租户" onClose={() => setShowCreate(false)}>
+          <div className="col gap">
+            <label className="field"><span className="field-label">租户名称</span>
+              <input className="input" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="acme" /></label>
+            <label className="field"><span className="field-label">Owner actor</span>
+              <input className="input" value={createOwner} onChange={(e) => setCreateOwner(e.target.value)} placeholder="frank" /></label>
+            <label className="field"><span className="field-label">套餐</span>
+              <select className="input select" value={createPlan} onChange={(e) => setCreatePlan(e.target.value)}>
+                <option value="plan-free">plan-free</option>
+                <option value="plan-pro">plan-pro</option>
+              </select></label>
+            <button
+              className="btn btn-primary"
+              disabled={busy || !createName.trim() || !createOwner.trim()}
+              onClick={() => void create()}
+            >
+              创建（provisioning）
+            </button>
+            <p className="muted">创建后进入 provisioning，审核通过并激活后租户可登录使用。</p>
           </div>
-          {createMsg && <p className="muted">{createMsg}</p>}
-        </div>
-      </div>
+        </Modal>
+      )}
     </div>
   )
 }

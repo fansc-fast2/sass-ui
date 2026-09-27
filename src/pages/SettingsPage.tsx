@@ -9,7 +9,8 @@ import {
   listTenantSupportGrants, decideSupportGrant,
 } from '../api/api'
 import type { TenantMember, TenantUsageBucket, TenantSupportGrant } from '../api/types'
-import { Badge, Button, Card, MonoText, Select, TextInput } from '../components/ui'
+import { Badge, Button, Card, Field, MonoText, Select, TextInput } from '../components/ui'
+import { Modal } from '../components/Modal'
 import { LoginFlow } from '../components/LoginFlow'
 import { PERM_LABELS, ROLE_LABELS } from '../session/permissions'
 import { useSession } from '../session/SessionContext'
@@ -144,6 +145,7 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
   const [inviteToken, setInviteToken] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showInvite, setShowInvite] = useState(false)
 
   const load = async () => {
     if (!tenantId) return
@@ -162,6 +164,7 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
       setInviteToken(res.data.token)
       setMsg(`邀请已创建（${res.data.id}），明文令牌只显示一次`)
       setInvitee('')
+      setShowInvite(false)
       await load()
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
@@ -202,12 +205,24 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
       )}
       {isAdmin && (
         <div className="row gap wrap">
-          <TextInput value={invitee} onChange={(e) => setInvitee(e.target.value)} placeholder="受邀身份登录名" style={{ width: 180 }} />
-          <Select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: 160 }}>
-            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}</option>)}
-          </Select>
-          <Button variant="primary" disabled={!invitee.trim()} onClick={() => void invite()}>邀请</Button>
+          <Button variant="primary" onClick={() => setShowInvite(true)}>＋ 邀请成员</Button>
         </div>
+      )}
+      {showInvite && isAdmin && (
+        <Modal title="邀请成员" onClose={() => setShowInvite(false)}>
+          <div className="col gap">
+            <Field label="受邀身份登录名">
+              <TextInput value={invitee} onChange={(e) => setInvitee(e.target.value)} placeholder="olivia" />
+            </Field>
+            <Field label="租户内角色">
+              <Select value={role} onChange={(e) => setRole(e.target.value)}>
+                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}</option>)}
+              </Select>
+            </Field>
+            <Button variant="primary" disabled={!invitee.trim()} onClick={() => void invite()}>创建邀请</Button>
+            <p className="muted">邀请创建后生成一次性明文令牌（只显示一次），受邀人在"我的邀请"中凭令牌接受。</p>
+          </div>
+        </Modal>
       )}
       {inviteToken && (
         <div className="banner banner-warn">

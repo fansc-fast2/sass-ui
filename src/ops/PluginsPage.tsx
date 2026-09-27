@@ -9,6 +9,7 @@ import {
   opsListTenants, opsPluginsOverview, opsUninstallChannelInstallation,
 } from './opsClient'
 import type { ChannelInstallRow, PluginsOverview } from './opsClient'
+import { Modal } from '../components/Modal'
 
 const INSTALL_TONES: Record<string, string> = { active: 'badge-ok', uninstalled: 'badge-neutral' }
 
@@ -27,6 +28,7 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
   const [newDomain, setNewDomain] = useState('')
   const [newReg, setNewReg] = useState('car-test-ride-app-1')
   const [createMsg, setCreateMsg] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
 
   const [detail, setDetail] = useState<ChannelInstallRow | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
@@ -67,6 +69,7 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
       setCreateMsg(`已绑定 ${ci.shop_stable_id} → ${ci.tenant_id}（epoch ${ci.installation_epoch}）`)
       setNewShop('')
       setNewDomain('')
+      setShowCreate(false)
       await query()
     } catch (e) {
       setCreateMsg(e instanceof Error ? e.message : String(e))
@@ -126,6 +129,10 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
       {/* 安装列表 */}
       <div className="card">
         <div className="card-body">
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <strong>渠道安装</strong>
+            <button className="btn btn-primary" disabled={!isAdmin} onClick={() => setShowCreate(true)}>＋ 注册安装</button>
+          </div>
           <div className="row gap wrap">
             <select className="input select" style={{ width: 150 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">（全部状态）</option>
@@ -133,8 +140,9 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
               <option value="uninstalled">uninstalled</option>
             </select>
             <input className="input" style={{ width: 160 }} placeholder="tenant_id（如 t_1）" value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)} />
-            <button className="btn btn-primary" disabled={busy} onClick={() => void query()}>{busy ? '查询中…' : '查询'}</button>
+            <button className="btn" disabled={busy} onClick={() => void query()}>{busy ? '查询中…' : '查询'}</button>
           </div>
+          {createMsg && <p className="muted">{createMsg}</p>}
           {installs && installs.length > 0 && (
             <table className="table">
               <thead><tr><th>店铺</th><th>租户</th><th>App 注册</th><th>状态</th><th>epoch</th><th>安装时间</th><th></th></tr></thead>
@@ -272,19 +280,21 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {/* 注册安装 */}
-      <div className="card">
-        <div className="card-body">
-          <strong>注册安装绑定</strong>
-          <p className="muted">幂等：同 App 注册+店铺已绑同一租户时返回原绑定；换租户必须先卸载重装。</p>
-          <div className="row gap wrap">
-            <select className="input select" style={{ width: 170 }} value={newTenant} onChange={(e) => setNewTenant(e.target.value)}>
-              <option value="">选择租户…</option>
-              {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}（{t.id}）</option>)}
-            </select>
-            <input className="input" style={{ width: 210 }} placeholder="店铺稳定 ID（如 shop-demo.myshopify.com）" value={newShop} onChange={(e) => setNewShop(e.target.value)} />
-            <input className="input" style={{ width: 180 }} placeholder="规范域名（可留空同店铺 ID）" value={newDomain} onChange={(e) => setNewDomain(e.target.value)} />
-            <input className="input" style={{ width: 200 }} placeholder="App 注册 ID" value={newReg} onChange={(e) => setNewReg(e.target.value)} />
+      {/* 注册安装：弹窗承载 */}
+      {showCreate && (
+        <Modal title="注册安装绑定" onClose={() => setShowCreate(false)} wide>
+          <div className="col gap">
+            <label className="field"><span className="field-label">租户</span>
+              <select className="input select" value={newTenant} onChange={(e) => setNewTenant(e.target.value)}>
+                <option value="">选择租户…</option>
+                {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}（{t.id}）</option>)}
+              </select></label>
+            <label className="field"><span className="field-label">店铺稳定 ID</span>
+              <input className="input" value={newShop} onChange={(e) => setNewShop(e.target.value)} placeholder="shop-demo.myshopify.com" /></label>
+            <label className="field"><span className="field-label">规范域名（可留空同店铺 ID）</span>
+              <input className="input" value={newDomain} onChange={(e) => setNewDomain(e.target.value)} /></label>
+            <label className="field"><span className="field-label">App 注册 ID</span>
+              <input className="input" value={newReg} onChange={(e) => setNewReg(e.target.value)} /></label>
             <button
               className="btn btn-primary"
               disabled={!isAdmin || busy || !newTenant || !newShop.trim() || !newReg.trim()}
@@ -292,11 +302,10 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
             >
               绑定（幂等）
             </button>
+            <p className="muted">幂等：同 App 注册+店铺已绑同一租户时返回原绑定；换租户必须先卸载重装。注册/卸载需要 platform_admin 角色。</p>
           </div>
-          {!isAdmin && <p className="muted">注册/卸载需要 platform_admin 角色。</p>}
-          {createMsg && <p className="muted">{createMsg}</p>}
-        </div>
-      </div>
+        </Modal>
+      )}
     </div>
   )
 }
