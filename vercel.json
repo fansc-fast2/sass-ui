@@ -3,12 +3,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/health", "destination": "https://API_ORIGIN_REPLACE_ME/health" },
-    { "source": "/v1/:path*", "destination": "https://API_ORIGIN_REPLACE_ME/v1/:path*" },
-    { "source": "/ops/:path*", "destination": "https://API_ORIGIN_REPLACE_ME/ops/:path*" },
-    { "source": "/shopify/:path*", "destination": "https://API_ORIGIN_REPLACE_ME/shopify/:path*" },
-    { "source": "/executor/:path*", "destination": "https://API_ORIGIN_REPLACE_ME/executor/:path*" },
-    { "source": "/integrations/:path*", "destination": "https://API_ORIGIN_REPLACE_ME/integrations/:path*" },
+    { "source": "/health", "destination": "https://api.fast2x.com/health" },
+    { "source": "/v1/:path*", "destination": "https://api.fast2x.com/v1/:path*" },
+    { "source": "/ops/:path*", "destination": "https://api.fast2x.com/ops/:path*" },
+    { "source": "/shopify/:path*", "destination": "https://api.fast2x.com/shopify/:path*" },
+    { "source": "/executor/:path*", "destination": "https://api.fast2x.com/executor/:path*" },
+    { "source": "/integrations/:path*", "destination": "https://api.fast2x.com/integrations/:path*" },
     { "source": "/:path*", "destination": "/index.html" }
   ]
 }

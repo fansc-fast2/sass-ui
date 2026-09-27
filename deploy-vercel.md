@@ -18,9 +18,10 @@ API 路径同源代理到后端**：
 
 ## 2. 部署步骤
 
-1. **先部署后端**（Back4app，见 platform-backend 仓库
-   `docs/deploy-back4app.md`），拿到 API 公网 URL，形如
-   `https://sass-api-xxxx.back4app.io`。
+1. **先部署后端**——后端同样推荐 Vercel（见 platform-backend 仓库
+   `docs/deploy-vercel.md`），拿到 API 公网 URL，形如
+   `https://sass-api-xxxx.vercel.app`；Back4app 容器形态的
+   `https://sassapi-4ei6fxv5.b4a.run` 同样可用（当前已验证在线）。
 2. 把该 URL 填进本仓库根目录 `vercel.json`——全文替换
    `API_ORIGIN_REPLACE_ME`（共 7 处，含 `/health` 一行）并提交：
    ```
