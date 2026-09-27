@@ -1,0 +1,52 @@
+# platform-web 站点：SPA 静态托管 + API 反代到 platform-backend 容器。
+# ${PORT} 与 ${BACKEND_ORIGIN} 来自容器环境变量（Back4app 控制台配置）；
+# nginx 官方镜像的 templates 机制只 envsubst 已定义环境变量，$uri 等
+# nginx 内置变量不受影响。
+server {
+    listen ${PORT};
+    server_name _;
+    client_max_body_size 10m;
+
+    # 健康检查直接打后端（/health 是 Go 进程的存活真相）
+    location = /health {
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_read_timeout 5s;
+    }
+
+    # API 与控制面路径：/v1（契约+平台域）、/ops（ops 面经 /ops/v1）、
+    # /shopify（安装流+webhook）、/executor（子站领取）、/integrations（webhook）
+    location /v1/ {
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location /ops/ {
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_set_header Host $host;
+    }
+    location /shopify/ {
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_set_header Host $host;
+    }
+    location /executor/ {
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_set_header Host $host;
+    }
+    location /integrations/ {
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_set_header Host $host;
+    }
+
+    # SPA：vite 产物 + 路由回退（/optimization、/ops 等直达刷新不 404）
+    location /assets/ {
+        root /usr/share/nginx/html;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+}
