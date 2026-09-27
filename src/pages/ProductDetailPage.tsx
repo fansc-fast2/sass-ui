@@ -7,6 +7,9 @@ import type { ReactNode } from 'react'
 import { createAuditJob, createSyncJob, getProduct, listChangeSets, listEvidence, listIssues, getProductKnowledge } from '../api/api'
 import type { EvidenceDetail, IssueDetail, ProductDetail } from '../api/types'
 import { Badge, Button, Card, ErrorBanner, JsonView, MonoText, ResultRow, TextInput } from '../components/ui'
+import { IconChevronLeft, IconArrowRight } from '../components/icons'
+import { RelativeTime } from '../components/RelativeTime'
+import { toast } from '../components/Toast'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
@@ -74,6 +77,7 @@ export function ProductDetailPage() {
     if (res) {
       addJob({ jobId: res.data.job_id, kind: 'sync', createdAt: new Date().toLocaleTimeString('zh-CN', { hour12: false }), lastStatus: res.data.status })
       setActionMsg(`同步已受理：${res.data.job_id}`)
+      toast.ok(`同步知识已受理：${res.data.job_id}（${res.data.status}），可在任务中心跟踪`)
     }
   }
   const doAudit = async () => {
@@ -81,6 +85,7 @@ export function ProductDetailPage() {
     if (res) {
       addJob({ jobId: res.data.job_id, kind: 'audit', createdAt: new Date().toLocaleTimeString('zh-CN', { hour12: false }), lastStatus: res.data.status })
       setActionMsg(`审计已受理：${res.data.job_id}`)
+      toast.ok(`审计已受理：${res.data.job_id}（${res.data.status}），可在任务中心跟踪`)
     }
   }
 
@@ -90,7 +95,9 @@ export function ProductDetailPage() {
       <Card
         title="商品详情"
         subtitle="商品身份与来源固定显示；变体与市场切换不改变基础商品身份（19 §4 P02）"
-        actions={<Button variant="ghost" onClick={() => navigate('products')}>← 返回目录</Button>}
+        actions={<Button variant="ghost" onClick={() => navigate('products')}>
+          <span className="btn-icon-text"><IconChevronLeft size={13} /> 返回目录</span>
+        </Button>}
       >
         <div className="row gap">
           <TextInput value={id} onChange={(e) => setId(e.target.value)} placeholder="product_id" style={{ maxWidth: 260 }} />
@@ -119,7 +126,7 @@ export function ProductDetailPage() {
                 <Badge tone={detail.product.freshness === 'current' ? 'ok' : detail.product.freshness === 'stale' ? 'warn' : 'neutral'}>
                   {detail.product.freshness}
                 </Badge>
-                <span className="muted"> 源更新 {detail.product.source_updated_at} · 同步 {detail.product.synced_at}</span>
+                <span className="muted"> 源更新 <RelativeTime value={detail.product.source_updated_at} fallback={detail.product.source_updated_at} /> · 同步 <RelativeTime value={detail.product.synced_at} fallback={detail.product.synced_at} /></span>
               </ResultRow>
             </div>
 
@@ -129,7 +136,9 @@ export function ProductDetailPage() {
               <TextInput value={auditSite} onChange={(e) => setAuditSite(e.target.value)} style={{ width: 140 }} />
               <Button disabled={!canAudit || loading || !id} onClick={() => void doAudit()}>发起审计</Button>
               <Button variant="primary" disabled={!canPropose || !id} onClick={() => navigate('optimization', id)}>发起优化提案</Button>
-              <Button variant="ghost" onClick={() => navigate('tasks')}>任务中心 →</Button>
+              <Button variant="ghost" onClick={() => navigate('tasks')}>
+                <span className="btn-icon-text">任务中心 <IconArrowRight size={13} /></span>
+              </Button>
             </div>
             {!canSync && <p className="muted">同步需要 analyst 及以上；提案需要 change.propose 权限。</p>}
             {actionMsg && <p><Badge tone="ok">已受理</Badge> <MonoText>{actionMsg}</MonoText></p>}
@@ -222,7 +231,7 @@ export function ProductDetailPage() {
             )}
 
             {tab === '变更与发布' && (
-              <p className="muted">该商品的变更历史在「优化中心 → 提案」按 product_id 筛选查看；发布任务在「任务中心」。</p>
+              <p className="muted">该商品的变更历史在「优化中心 / 提案」按 product_id 筛选查看；发布任务在「任务中心」。</p>
             )}
           </>
         )}

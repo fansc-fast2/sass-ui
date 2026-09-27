@@ -8,9 +8,19 @@ import type { ActionItem, ActivityEventItem, JobItem, Overview } from '../api/ty
 import { JobStatusBadge, overviewCardValue } from '../components/StatusBadge'
 import { ListState } from '../components/ListState'
 import { ActionCard, Badge, Card, EmptyState, ErrorBanner, StatCard } from '../components/ui'
+import { DataTable } from '../components/DataTable'
+import type { Column } from '../components/DataTable'
+import { RelativeTime } from '../components/RelativeTime'
+import { IconBell, IconClipboard, IconEdit, IconGlobe, IconProducts, IconRobot } from '../components/icons'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
+
+const PRIORITY_LABELS: Record<string, string> = {
+  high: '高',
+  normal: '中',
+  low: '低',
+}
 
 export function OverviewPage() {
   const { active, identityUser } = useSession()
@@ -36,6 +46,57 @@ export function OverviewPage() {
     // eslint 风格：本页只加载一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const actionColumns: Column<ActionItem>[] = [
+    {
+      key: 'title',
+      header: '待办',
+      render: (a) => <span className="cell-strong">{a.title}</span>,
+      sortValue: (a) => a.title,
+      ellipsis: 320,
+      titleOf: (a) => a.title,
+    },
+    {
+      key: 'source',
+      header: '来源',
+      render: (a) => (<><Badge tone="neutral">{a.source.kind}</Badge> <code className="mono">{a.source.id}</code></>),
+      sortValue: (a) => a.source.kind,
+    },
+    { key: 'action', header: '动作', render: (a) => a.action_kind, sortValue: (a) => a.action_kind },
+    {
+      key: 'priority',
+      header: '优先级',
+      render: (a) => (
+        <Badge tone={a.priority === 'high' ? 'err' : a.priority === 'normal' ? 'info' : 'neutral'}>
+          {PRIORITY_LABELS[a.priority] ?? a.priority}
+        </Badge>
+      ),
+      sortValue: (a) => a.priority,
+    },
+    {
+      key: 'created_at',
+      header: '创建时间',
+      render: (a) => <span className="muted"><RelativeTime value={a.created_at} fallback={a.created_at} /></span>,
+      sortValue: (a) => a.created_at,
+    },
+  ]
+
+  const jobColumns: Column<JobItem>[] = [
+    { key: 'id', header: '任务', render: (j) => (<><code className="mono">{j.id}</code> <Badge tone="neutral">{j.type}</Badge></>), sortValue: (j) => j.id, ellipsis: 220, titleOf: (j) => j.id },
+    { key: 'progress', header: '进度', render: (j) => `${j.completed_items}/${j.total_items}`, sortValue: (j) => j.completed_items },
+    { key: 'status', header: '状态', render: (j) => <JobStatusBadge status={j.status} requiresAttention={j.requires_attention} /> },
+  ]
+
+  const eventColumns: Column<ActivityEventItem>[] = [
+    {
+      key: 'occurred_at',
+      header: '时间',
+      render: (e) => <span className="muted"><RelativeTime value={e.occurred_at} /></span>,
+      sortValue: (e) => e.occurred_at,
+    },
+    { key: 'action', header: '动作', render: (e) => e.action, sortValue: (e) => e.action },
+    { key: 'summary', header: '摘要', render: (e) => e.summary, sortValue: (e) => e.summary, ellipsis: 340, titleOf: (e) => e.summary },
+  ]
 
   return (
     <div className="page">
@@ -87,13 +148,13 @@ export function OverviewPage() {
         <Card title="AI 任务入口" subtitle="AI 工作区按对象上下文发起检查与候选生成">
           <div className="action-grid two">
             <ActionCard
-              icon="🤖"
+              icon={<IconRobot size={22} />}
               title="AI 工作区"
               desc="独立工作区按阶段接入；未接通时只提供只读入口"
               onClick={() => navigate('ai')}
             />
             <ActionCard
-              icon="🔔"
+              icon={<IconBell size={22} />}
               title="通知"
               desc="当前用户通知与已读标记（notification.read）"
               onClick={() => navigate('settings')}
@@ -104,65 +165,46 @@ export function OverviewPage() {
 
       <Card title="需要我处理" subtitle="GET /v1/action-items · 由问题/提案/任务派生；同一对象合并为同一待办">
         <ListState loading={loading} error={null} count={actionItems.length} empty="没有待处理事项——待办由问题、提案和执行异常自动派生">
-          <table className="table">
-            <thead><tr><th>待办</th><th>来源</th><th>动作</th><th>优先级</th><th>创建时间</th></tr></thead>
-            <tbody>
-              {actionItems.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.title}</td>
-                  <td><Badge tone="neutral">{a.source.kind}</Badge> <code className="mono">{a.source.id}</code></td>
-                  <td>{a.action_kind}</td>
-                  <td><Badge tone={a.priority === 'high' ? 'err' : a.priority === 'normal' ? 'info' : 'neutral'}>{a.priority}</Badge></td>
-                  <td>{a.created_at}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            columns={actionColumns}
+            rows={actionItems}
+            getRowKey={(a) => a.id}
+            initialSortKey="created_at"
+            initialSortDir="desc"
+          />
         </ListState>
       </Card>
 
       <div className="cards">
         <Card title="正在执行" subtitle="GET /v1/jobs · running 状态（requires_attention 时显示需要处理）">
           <ListState loading={loading} error={null} count={runningJobs.length} empty="当前没有执行中的任务">
-            <table className="table">
-              <thead><tr><th>任务</th><th>进度</th><th>状态</th></tr></thead>
-              <tbody>
-                {runningJobs.map((j) => (
-                  <tr key={j.id}>
-                    <td><code className="mono">{j.id}</code> <Badge tone="neutral">{j.type}</Badge></td>
-                    <td>{j.completed_items}/{j.total_items}</td>
-                    <td><JobStatusBadge status={j.status} requiresAttention={j.requires_attention} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={jobColumns}
+              rows={runningJobs}
+              getRowKey={(j) => j.id}
+              noFooter
+            />
           </ListState>
         </Card>
 
         <Card title="近期结果" subtitle="GET /v1/activity-events · 可见业务活动摘要（非平台全量审计）">
           <ListState loading={loading} error={null} count={events.length} empty="暂无业务活动记录">
-            <table className="table">
-              <thead><tr><th>时间</th><th>动作</th><th>摘要</th></tr></thead>
-              <tbody>
-                {events.map((e) => (
-                  <tr key={e.id}>
-                    <td>{new Date(e.occurred_at).toLocaleTimeString('zh-CN', { hour12: false })}</td>
-                    <td>{e.action}</td>
-                    <td>{e.summary}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={eventColumns}
+              rows={events}
+              getRowKey={(e) => e.id}
+              noFooter
+            />
           </ListState>
         </Card>
       </div>
 
       <Card title="快捷入口" subtitle="按日常工作流组织的入口">
         <div className="action-grid">
-          <ActionCard icon="📦" title="商品与知识" desc="商品目录、知识详情、证据与问题" onClick={() => navigate('products')} />
-          <ActionCard icon="🌐" title="站点与渠道" desc="站点列表、连接状态、检查覆盖" onClick={() => navigate('sites')} />
-          <ActionCard icon="✏️" title="优化中心" desc="问题处理、提案确认、效果记录" onClick={() => navigate('optimization')} />
-          <ActionCard icon="📋" title="任务中心" desc="任务列表、分项状态、取消与恢复" onClick={() => navigate('tasks')} />
+          <ActionCard icon={<IconProducts size={22} />} title="商品与知识" desc="商品目录、知识详情、证据与问题" onClick={() => navigate('products')} />
+          <ActionCard icon={<IconGlobe size={22} />} title="站点与渠道" desc="站点列表、连接状态、检查覆盖" onClick={() => navigate('sites')} />
+          <ActionCard icon={<IconEdit size={22} />} title="优化中心" desc="问题处理、提案确认、效果记录" onClick={() => navigate('optimization')} />
+          <ActionCard icon={<IconClipboard size={22} />} title="任务中心" desc="任务列表、分项状态、取消与恢复" onClick={() => navigate('tasks')} />
         </div>
       </Card>
 

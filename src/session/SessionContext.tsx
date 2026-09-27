@@ -41,6 +41,7 @@ interface SessionContextValue {
   active: ActiveTenant | null
   booted: boolean
   login: (login: string, password: string) => Promise<Membership[]>
+  completeOidcLogin: (oit: string) => Promise<Membership[]>
   selectTenant: (membershipId: string) => Promise<void>
   logout: () => void
   hasScope: (perm: string) => boolean
@@ -160,6 +161,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return memData.items
   }, [])
 
+  // OIDC 回调完成：一次性码换取身份会话（M0 Q06 生产身份路径）
+  const completeOidcLogin = useCallback(async (oit: string): Promise<Membership[]> => {
+    const res = await fetch('/v1/auth/oidc/exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oit }),
+    })
+    const data = await parseEnvelope<{ token: string; identity: IdentityUser }>(res)
+    sSet(ID_TOKEN_KEY, data.token)
+    setIdentityToken(data.token)
+    setIdentityUser(data.identity)
+    const memRes = await fetch('/v1/me/memberships', { headers: { Authorization: `Bearer ${data.token}` } })
+    const memData = await parseEnvelope<{ items: Membership[] }>(memRes)
+    setMemberships(memData.items)
+    return memData.items
+  }, [])
+
   const selectTenant = useCallback(async (membershipId: string): Promise<void> => {
     const tok = sGet(ID_TOKEN_KEY)
     if (!tok) throw new Error('no identity session')
@@ -196,9 +214,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       identityUser, identityToken, memberships, active, booted,
-      login, selectTenant, logout, hasScope,
+      login, completeOidcLogin, selectTenant, logout, hasScope,
     }),
-    [identityUser, identityToken, memberships, active, booted, login, selectTenant, logout, hasScope],
+    [identityUser, identityToken, memberships, active, booted, login, completeOidcLogin, selectTenant, logout, hasScope],
   )
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

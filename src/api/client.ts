@@ -3,6 +3,7 @@
 // 同源部署：vite dev/preview 把 /health、/v1、/integrations 代理到 platform-api。
 
 import type { ApiErrorPayload, Envelope } from './types'
+import { stableIdempotencyKey } from './idempotency'
 
 /** 业务错误：携带信封里的 code/retryable/request_id，供界面精确提示。 */
 export class ApiRequestError extends Error {
@@ -61,6 +62,12 @@ export interface RequestOptions {
   signal?: AbortSignal
   /** 查询参数；undefined/空串字段自动省略。 */
   query?: Record<string, string | number | boolean | undefined>
+  /**
+   * 幂等键 scope（10 §5：页面刷新不丢失幂等键，重试使用同一请求内容）。
+   * 传入时 Idempotency-Key 取 sessionStorage 稳定键（同 scope 同键），
+   * 用于创建/授权/执行发布等发布路径；不传保持原行为。
+   */
+  idempotencyScope?: string
 }
 
 function buildQuery(q: RequestOptions['query']): string {
@@ -98,7 +105,9 @@ export async function apiRequest<T>(
   if (token) headers.Authorization = `Bearer ${token}`
   if (method === 'POST' || method === 'PATCH') {
     headers['Content-Type'] = 'application/json'
-    headers['Idempotency-Key'] = idempotencyKey()
+    headers['Idempotency-Key'] = opts.idempotencyScope
+      ? stableIdempotencyKey(opts.idempotencyScope)
+      : idempotencyKey()
   }
 
   const started = performance.now()

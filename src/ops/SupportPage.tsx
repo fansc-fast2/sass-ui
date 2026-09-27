@@ -9,6 +9,7 @@ import {
 } from './opsClient'
 import type { SupportGrantView } from './opsClient'
 import { Modal } from '../components/Modal'
+import { IconPlus } from '../components/icons'
 
 const GRANT_TONES: Record<string, string> = {
   requested: 'badge-warn',
@@ -117,7 +118,9 @@ export default function SupportPage() {
                 支持访问是"租户批准的例外"：租户侧审批后才可建立 15 分钟只读会话，全程审计。
               </p>
             </div>
-            <button className="btn btn-primary" onClick={() => setShowReq(true)}>＋ 发起申请</button>
+            <button className="btn btn-primary" onClick={() => setShowReq(true)}>
+              <span className="btn-icon-text"><IconPlus size={13} /> 发起申请</span>
+            </button>
           </div>
           {reqMsg && <p className="muted">{reqMsg}</p>}
         </div>
@@ -189,7 +192,7 @@ export default function SupportPage() {
                     </td>
                     <td>{g.permission}</td>
                     <td className="muted">
-                      {g.requested_by}{g.approved_by ? ` → ${g.approved_by}` : ''}<br />
+                      {g.requested_by}{g.approved_by ? `（批准：${g.approved_by}）` : ''}<br />
                       {new Date(g.created_at).toLocaleString('zh-CN', { hour12: false })}
                     </td>
                     <td>

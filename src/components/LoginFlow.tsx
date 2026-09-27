@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useSession } from '../session/SessionContext'
 import { ROLE_LABELS } from '../session/permissions'
 import { Badge, Button, Field, TextInput } from './ui'
+import { IconChevronLeft } from './icons'
 
 export function LoginFlow({ onDone, startStep }: { onDone?: () => void; startStep?: 'login' | 'select' }) {
   const { login: doLogin, selectTenant, memberships } = useSession()
@@ -14,6 +15,25 @@ export function LoginFlow({ onDone, startStep }: { onDone?: () => void; startSte
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [ssoHint, setSsoHint] = useState<string | null>(null)
+
+  // 企业 SSO（生产身份，M0 Q06）：向平台取 authorize_url 后整页跳转 IdP。
+  // 平台未配置 PK_OIDC_* 时（404）隐藏入口并提示。
+  const startSSO = async () => {
+    setError(null)
+    try {
+      const res = await fetch('/v1/auth/oidc/authorize?format=json')
+      if (res.status === 404) {
+        setSsoHint('平台未启用 SSO（未配置 PK_OIDC_*）')
+        return
+      }
+      const env = await res.json()
+      if (!env?.data?.authorize_url) throw new Error(env?.error?.message ?? 'SSO 配置缺失')
+      window.location.href = env.data.authorize_url
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   const submitLogin = async () => {
     setBusy(true)
@@ -64,6 +84,8 @@ export function LoginFlow({ onDone, startStep }: { onDone?: () => void; startSte
           <Button type="submit" variant="primary" disabled={busy || !login.trim() || !password}>
             {busy ? '登录中…' : '登录'}
           </Button>
+          <Button variant="ghost" onClick={() => void startSSO()}>企业 SSO 登录</Button>
+          {ssoHint && <p className="muted">{ssoHint}</p>}
         </form>
       )}
       {step === 'select' && (
@@ -83,7 +105,9 @@ export function LoginFlow({ onDone, startStep }: { onDone?: () => void; startSte
           </div>
           {error && <div className="banner banner-err">{error}</div>}
           <div className="row gap">
-            <Button variant="ghost" onClick={() => setStep('login')}>← 重新登录</Button>
+            <Button variant="ghost" onClick={() => setStep('login')}>
+              <span className="btn-icon-text"><IconChevronLeft size={13} /> 重新登录</span>
+            </Button>
             <Button variant="ghost" onClick={onDone}>稍后选择</Button>
           </div>
         </div>

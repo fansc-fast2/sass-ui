@@ -65,32 +65,34 @@ export const verifyFact = (id: string, body: VerifyFactBody) =>
   apiRequest<VerifiedFact>('POST', `/v1/facts/${encodeURIComponent(id)}/verify`, { body })
 
 // POST /v1/change-sets —— change.propose（201）
-export const createChangeSet = (entries: ChangeEntry[]) =>
-  apiRequest<ChangeSetCreated>('POST', '/v1/change-sets', { body: { entries } })
+// idempotencyScope：发布路径使用 sessionStorage 稳定幂等键（10 §5）
+export const createChangeSet = (entries: ChangeEntry[], opts?: { idempotencyScope?: string }) =>
+  apiRequest<ChangeSetCreated>('POST', '/v1/change-sets', { body: { entries }, idempotencyScope: opts?.idempotencyScope })
 
 // GET /v1/change-sets/{id} —— change.read
 export const getChangeSet = (id: string) =>
   apiRequest<ChangeSetView>('GET', `/v1/change-sets/${encodeURIComponent(id)}`)
 
 // POST /v1/change-sets/{id}/authorize —— change.authorize（201，回显 GET 的 content_hash）
-export const authorizeChangeSet = (id: string, body: AuthorizeBody) =>
-  apiRequest<AuthorizationCreated>('POST', `/v1/change-sets/${encodeURIComponent(id)}/authorize`, { body })
+export const authorizeChangeSet = (id: string, body: AuthorizeBody, opts?: { idempotencyScope?: string }) =>
+  apiRequest<AuthorizationCreated>('POST', `/v1/change-sets/${encodeURIComponent(id)}/authorize`, { body, idempotencyScope: opts?.idempotencyScope })
 
 // POST /v1/change-sets/{id}/revoke —— change.authorize
-export const revokeChangeSet = (id: string, body: RevokeBody) =>
-  apiRequest<RevokedSet>('POST', `/v1/change-sets/${encodeURIComponent(id)}/revoke`, { body })
+export const revokeChangeSet = (id: string, body: RevokeBody, opts?: { idempotencyScope?: string }) =>
+  apiRequest<RevokedSet>('POST', `/v1/change-sets/${encodeURIComponent(id)}/revoke`, { body, idempotencyScope: opts?.idempotencyScope })
 
 // POST /v1/change-sets/{id}/execute —— change.execute（202）
-export const executeChangeSet = (id: string, body: ExecuteBody) =>
-  apiRequest<ExecutionAccepted>('POST', `/v1/change-sets/${encodeURIComponent(id)}/execute`, { body })
+// 执行是最高危路径：同授权 + 同内容重试必须复用同一幂等键，避免重复发布
+export const executeChangeSet = (id: string, body: ExecuteBody, opts?: { idempotencyScope?: string }) =>
+  apiRequest<ExecutionAccepted>('POST', `/v1/change-sets/${encodeURIComponent(id)}/execute`, { body, idempotencyScope: opts?.idempotencyScope })
 
 // GET /v1/executions/{id} —— job.read
 export const getExecution = (id: string) =>
   apiRequest<ExecutionView>('GET', `/v1/executions/${encodeURIComponent(id)}`)
 
 // POST /v1/executions/{id}/restore-proposals —— change.restore（201）
-export const createRestoreProposals = (id: string, body: RestoreProposalsBody) =>
-  apiRequest<RestoreProposalsCreated>('POST', `/v1/executions/${encodeURIComponent(id)}/restore-proposals`, { body })
+export const createRestoreProposals = (id: string, body: RestoreProposalsBody, opts?: { idempotencyScope?: string }) =>
+  apiRequest<RestoreProposalsCreated>('POST', `/v1/executions/${encodeURIComponent(id)}/restore-proposals`, { body, idempotencyScope: opts?.idempotencyScope })
 
 // GET /v1/jobs/{id} —— job.read（详情含 result 聚合与 retry_of，v1.6）
 export const getJob = (id: string) =>

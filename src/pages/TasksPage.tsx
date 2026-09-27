@@ -6,8 +6,10 @@ import { useState } from 'react'
 import { listJobs } from '../api/api'
 import type { JobItem } from '../api/types'
 import { JobStatusBadge } from '../components/StatusBadge'
-import { ListState } from '../components/ListState'
 import { Badge, Button, Card, ErrorBanner, MonoText, Select, TextInput } from '../components/ui'
+import { DataTable } from '../components/DataTable'
+import type { Column } from '../components/DataTable'
+import { RelativeTime } from '../components/RelativeTime'
 import { ActivityPanels } from './Activity'
 import { useApiOperation } from '../state/useApiOperation'
 
@@ -34,6 +36,49 @@ export function TasksPage() {
       setLoaded(true)
     }
   }
+
+  const columns: Column<JobItem>[] = [
+    {
+      key: 'id',
+      header: '任务',
+      render: (j) => <MonoText>{j.id}</MonoText>,
+      sortValue: (j) => j.id,
+      ellipsis: 220,
+      titleOf: (j) => j.id,
+    },
+    { key: 'type', header: '类型', render: (j) => <Badge tone="neutral">{j.type}</Badge>, sortValue: (j) => j.type },
+    {
+      key: 'progress',
+      header: '完成项 / 总项',
+      render: (j) => `${j.completed_items}/${j.total_items}`,
+      sortValue: (j) => j.total_items > 0 ? j.completed_items / j.total_items : 0,
+    },
+    {
+      key: 'status',
+      header: '状态',
+      render: (j) => (
+        <>
+          <JobStatusBadge status={j.status} requiresAttention={j.requires_attention} />
+          {j.attention_reason && <div className="muted">{j.attention_reason}</div>}
+        </>
+      ),
+      sortValue: (j) => j.status,
+    },
+    {
+      key: 'side_effects',
+      header: '副作用',
+      render: (j) => <span className="muted">{j.side_effect_summary || '—'}</span>,
+      sortValue: (j) => j.side_effect_summary,
+      ellipsis: 220,
+      titleOf: (j) => j.side_effect_summary,
+    },
+    {
+      key: 'created_at',
+      header: '发起时间',
+      render: (j) => <span className="muted"><RelativeTime value={j.created_at} fallback={j.created_at} /></span>,
+      sortValue: (j) => j.created_at,
+    },
+  ]
 
   return (
     <div className="page">
@@ -64,33 +109,16 @@ export function TasksPage() {
             <span>只看需要处理</span>
           </label>
           <Button variant="primary" disabled={loading} onClick={() => void query()}>{loading ? '查询中…' : '查询'}</Button>
-          {nextCursor && <Button disabled={loading} onClick={() => void query(nextCursor)}>下一页</Button>}
         </div>
-        <ListState
-          loading={loading && loaded}
-          error={null}
-          count={items.length}
-          empty={loaded ? '没有匹配的任务' : '按状态/类型筛选后查询'}
-        >
-          <table className="table">
-            <thead><tr><th>任务</th><th>类型</th><th>完成项/总项</th><th>状态</th><th>副作用</th><th>发起时间</th></tr></thead>
-            <tbody>
-              {items.map((j) => (
-                <tr key={j.id}>
-                  <td><MonoText>{j.id}</MonoText></td>
-                  <td><Badge tone="neutral">{j.type}</Badge></td>
-                  <td>{j.completed_items}/{j.total_items}</td>
-                  <td>
-                    <JobStatusBadge status={j.status} requiresAttention={j.requires_attention} />
-                    {j.attention_reason && <div className="muted">{j.attention_reason}</div>}
-                  </td>
-                  <td className="muted">{j.side_effect_summary || '—'}</td>
-                  <td className="muted">{j.created_at}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ListState>
+        <DataTable
+          columns={columns}
+          rows={items}
+          getRowKey={(j) => j.id}
+          initialSortKey="created_at"
+          initialSortDir="desc"
+          empty={loaded ? '没有匹配的任务——调整状态/类型筛选后重新查询' : '按状态/类型筛选后点击查询'}
+          footerExtra={nextCursor ? <Button className="btn-xs" disabled={loading} onClick={() => void query(nextCursor)}>加载下一页</Button> : null}
+        />
       </Card>
 
       <ActivityPanels />

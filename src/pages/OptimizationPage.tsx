@@ -5,8 +5,9 @@ import { useState } from 'react'
 import { getExecution, listJobs } from '../api/api'
 import type { ExecutionView, JobItem } from '../api/types'
 import { JobStatusBadge } from '../components/StatusBadge'
-import { ListState } from '../components/ListState'
 import { Badge, Button, Card, ErrorBanner, JsonView, MonoText, ResultRow } from '../components/ui'
+import { DataTable } from '../components/DataTable'
+import type { Column } from '../components/DataTable'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
@@ -67,6 +68,48 @@ function ResultsTab() {
     if (res) setExec(res.data)
   }
 
+  const columns: Column<JobItem>[] = [
+    {
+      key: 'id',
+      header: '任务',
+      render: (j) => <MonoText>{j.id}</MonoText>,
+      sortValue: (j) => j.id,
+      ellipsis: 220,
+      titleOf: (j) => j.id,
+    },
+    {
+      key: 'scope',
+      header: '对象范围',
+      render: (j) => <span className="muted">{j.side_effect_summary || '—'}</span>,
+      sortValue: (j) => j.side_effect_summary,
+      ellipsis: 220,
+      titleOf: (j) => j.side_effect_summary,
+    },
+    {
+      key: 'progress',
+      header: '完成项',
+      render: (j) => `${j.completed_items}/${j.total_items}`,
+      sortValue: (j) => (j.total_items > 0 ? j.completed_items / j.total_items : 0),
+    },
+    {
+      key: 'status',
+      header: '状态',
+      render: (j) => <JobStatusBadge status={j.status} requiresAttention={j.requires_attention} />,
+      sortValue: (j) => j.status,
+    },
+    {
+      key: 'cancel',
+      header: '取消',
+      render: (j) => (j.cancel_requested ? <Badge tone="warn">取消已请求</Badge> : '—'),
+      sortValue: (j) => (j.cancel_requested ? 1 : 0),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (j) => (j.execution_id ? <Button className="btn-xs" onClick={() => void openExec(j.execution_id!)}>检查结果</Button> : null),
+    },
+  ]
+
   return (
     <>
       <ErrorBanner error={error} />
@@ -77,30 +120,14 @@ function ResultsTab() {
         <div className="row gap">
           <Button variant="primary" disabled={loading} onClick={() => void query()}>{loading ? '查询中…' : '查询执行记录'}</Button>
         </div>
-        <ListState
-          loading={loading && loaded}
-          error={null}
-          count={jobs.length}
-          empty={loaded ? '还没有执行记录——提案执行后出现在这里' : '点击查询加载'}
-        >
-          <table className="table">
-            <thead><tr><th>任务</th><th>对象范围</th><th>完成项</th><th>状态</th><th>副作用</th><th></th></tr></thead>
-            <tbody>
-              {jobs.map((j) => (
-                <tr key={j.id}>
-                  <td><MonoText>{j.id}</MonoText></td>
-                  <td className="muted">{j.side_effect_summary || '—'}</td>
-                  <td>{j.completed_items}/{j.total_items}</td>
-                  <td><JobStatusBadge status={j.status} requiresAttention={j.requires_attention} /></td>
-                  <td>{j.cancel_requested ? <Badge tone="warn">取消已请求</Badge> : '—'}</td>
-                  <td>
-                    {j.execution_id && <Button className="btn-xs" onClick={() => void openExec(j.execution_id!)}>检查结果</Button>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ListState>
+        <DataTable
+          columns={columns}
+          rows={jobs}
+          getRowKey={(j) => j.id}
+          initialSortKey="id"
+          empty={loaded ? '还没有执行记录——提案授权执行后出现在这里' : '点击「查询执行记录」加载'}
+          emptyAction={loaded ? <Button variant="primary" onClick={() => void query()}>重新查询</Button> : undefined}
+        />
         {exec && (
           <>
             <ResultRow label="执行编号"><MonoText>{exec.id}</MonoText></ResultRow>

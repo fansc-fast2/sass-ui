@@ -5,14 +5,17 @@
 
 import { useEffect, useState } from 'react'
 import { authorizeChangeSet, createChangeSet, executeChangeSet, getChangeSet, revokeChangeSet } from '../api/api'
+import { idempotencyScopeFor, stableIdempotencyKey } from '../api/idempotency'
 import type { ChangeEntry, ChangeSetCreated, ChangeSetView, ExecutionAccepted } from '../api/types'
-import { idempotencyKey } from '../api/client'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
+import { StatusBadge } from '../components/StatusBadge'
+import { toast } from '../components/Toast'
 import {
   Badge, Button, Card, ErrorBanner, Field, JsonView, MonoText, ResultRow, Select, Steps, TextArea, TextInput,
 } from '../components/ui'
+import { IconArrowRight, IconChevronLeft } from '../components/icons'
 
 const FIELD_WHITELIST = ['seo.title', 'seo.description', 'image.alt'] as const
 const STEP_LABELS = ['起草提案', '评审与授权', '执行与结果']
@@ -150,7 +153,10 @@ export function Proposals() {
       setFlowResult(v.err)
       return
     }
-    const res = await run('POST', '/v1/change-sets', () => createChangeSet(v.body))
+    const res = await run('POST', '/v1/change-sets', () => createChangeSet(v.body, {
+      // 10 §5：同内容重试（含页面刷新后）复用同一幂等键，不重复创建提案
+      idempotencyScope: idempotencyScopeFor('cs-create', 'draft', v.body),
+    }))
     if (res) {
       setCreated(res.data)
       upsertChangeSet(res.data)
@@ -158,6 +164,7 @@ export function Proposals() {
       setProposalVersion(String(res.data.proposal_version))
       setFlowResult(null)
       setStep(2)
+      toast.ok(`提案已创建：${res.data.id}（v${res.data.proposal_version}，${res.data.item_count} 处修改），进入评审与授权`)
     }
   }
 
@@ -191,17 +198,21 @@ export function Proposals() {
       hash = got.data.content_hash
     }
     const version = Number(proposalVersion)
+    // confirmation_id 与 Idempotency-Key 同源（10 §5）：页面刷新后重试，
+    // 两个值都保持不变，服务端据此去重，不会重复签发授权。
+    const confirmKey = stableIdempotencyKey(idempotencyScopeFor('cs-authorize', target, { hash, version, reason: authReason }))
     const res = await run('POST', `/v1/change-sets/${target}/authorize`, () =>
       authorizeChangeSet(target, {
         content_hash: hash ?? '',
         expected_proposal_version: Number.isFinite(version) ? version : 0,
-        confirmation_id: idempotencyKey(),
+        confirmation_id: confirmKey,
         reason: authReason,
-      }))
+      }, { idempotencyScope: idempotencyScopeFor('cs-authorize-key', target, { hash, version, reason: authReason }) }))
     if (res) {
       attachAuthorization(target, res.data)
       setExecAuthId(res.data.authorization_id)
       setFlowResult(`授权成功（${res.data.grant_type}，24 小时内有效），可以进入下一步执行。`)
+      toast.ok(`授权成功（${res.data.grant_type}），24 小时内有效；下一步执行发布`)
     }
   }
 
@@ -209,10 +220,13 @@ export function Proposals() {
     const target = viewId.trim()
     if (!target) return
     const res = await run('POST', `/v1/change-sets/${target}/revoke`, () =>
-      revokeChangeSet(target, { reason: revokeReason }))
+      revokeChangeSet(target, { reason: revokeReason }, {
+        idempotencyScope: idempotencyScopeFor('cs-revoke', target, revokeReason),
+      }))
     if (res) {
       setFlowResult(`提案已撤销（${res.data.status}）。如需重新优化，回到第一步重新起草。`)
       upsertChangeSet({ id: res.data.id, status: res.data.status })
+      toast.info(`提案已撤销（${res.data.status}）`)
     }
   }
 
@@ -220,18 +234,22 @@ export function Proposals() {
     const target = viewId.trim()
     if (!target || !execAuthId.trim()) return
     const res = await run('POST', `/v1/change-sets/${target}/execute`, () =>
-      executeChangeSet(target, { authorization_id: execAuthId.trim() }))
+      executeChangeSet(target, { authorization_id: execAuthId.trim() }, {
+        // 最高危路径：同提案 + 同授权重试必须复用同一幂等键，避免重复发布
+        idempotencyScope: idempotencyScopeFor('cs-execute', target, execAuthId.trim()),
+      }))
     if (res) {
       addExecution({ executionId: res.data.execution_id, jobId: res.data.job_id, status: res.data.status })
       setExecResult(res.data)
       setFlowResult(null)
+      toast.ok(`执行已受理：${res.data.execution_id}（任务 ${res.data.job_id}），到任务中心跟踪结果`)
     }
   }
 
   return (
     <div className="page">
       <ErrorBanner error={error} />
-      <Card title="优化提案向导" subtitle="把知识/审计结论落到商品字段：起草 → 评审授权 → 执行发布">
+      <Card title="优化提案向导" subtitle="把知识/审计结论落到商品字段：起草，评审授权，执行发布">
         <Steps current={step} labels={STEP_LABELS} />
         {flowResult && <p className="flow-result"><Badge tone="info">提示</Badge> {flowResult}</p>}
 
@@ -322,11 +340,13 @@ export function Proposals() {
             <div className="row gap">
               <TextInput value={viewId} onChange={(e) => setViewId(e.target.value)} placeholder="也可输入已有提案编号继续处理" style={{ maxWidth: 360 }} />
               <Button disabled={!canRead || loading || !viewId.trim()} onClick={() => void querySet()}>刷新状态</Button>
-              <Button variant="ghost" onClick={() => setStep(1)}>← 回到起草</Button>
+              <Button variant="ghost" onClick={() => setStep(1)}>
+                <span className="btn-icon-text"><IconChevronLeft size={13} /> 回到起草</span>
+              </Button>
             </div>
             {view && (
               <div className="result-col">
-                <ResultRow label="当前状态"><Badge tone="info">{view.status}</Badge></ResultRow>
+                <ResultRow label="当前状态"><StatusBadge status={view.status} fallbackLabel={view.status} /></ResultRow>
                 <ResultRow label="content_hash（授权时回显）"><MonoText>{view.content_hash}</MonoText></ResultRow>
                 <ResultRow label="哈希 schema">
                   {view.hash_schema_version
@@ -339,7 +359,7 @@ export function Proposals() {
             )}
             <div className="grid-2 cards inner">
               <div className="col gap">
-                <strong>评审通过 → 授权</strong>
+                <strong>评审通过并授权</strong>
                 <Field label="提案版本" hint="与服务端当前版本一致">
                   <TextInput value={proposalVersion} onChange={(e) => setProposalVersion(e.target.value)} />
                 </Field>
@@ -360,7 +380,7 @@ export function Proposals() {
                   撤销提案
                 </Button>
                 <Button variant="primary" disabled={!execAuthId.trim()} onClick={() => setStep(3)}>
-                  下一步：执行 →
+                  <span className="btn-icon-text">下一步：执行 <IconArrowRight size={13} /></span>
                 </Button>
                 {execAuthId
                   ? <p className="muted">已获得授权 <MonoText>{execAuthId}</MonoText></p>
@@ -381,7 +401,9 @@ export function Proposals() {
                 <Button variant="primary" disabled={!canExecute || loading || !viewId.trim() || !execAuthId.trim()} onClick={() => void submitExecute()}>
                   {loading ? '提交中…' : '确认执行'}
                 </Button>
-                <Button variant="ghost" onClick={() => setStep(2)}>← 回到评审</Button>
+                <Button variant="ghost" onClick={() => setStep(2)}>
+                  <span className="btn-icon-text"><IconChevronLeft size={13} /> 回到评审</span>
+                </Button>
                 {!canExecute && <p className="muted">需要 publisher 角色执行。</p>}
               </div>
             </div>
@@ -395,15 +417,22 @@ export function Proposals() {
             <ResultRow label="提案编号"><MonoText>{viewId}</MonoText></ResultRow>
             <ResultRow label="执行编号"><MonoText>{execResult.execution_id}</MonoText></ResultRow>
             <ResultRow label="任务编号"><MonoText>{execResult.job_id}</MonoText></ResultRow>
-            <ResultRow label="当前状态"><Badge tone="info">{execResult.status}</Badge></ResultRow>
-            <Button variant="primary" onClick={() => navigate('tasks')}>去执行记录跟踪 →</Button>
+            <ResultRow label="当前状态"><StatusBadge status={execResult.status} fallbackLabel={execResult.status} /></ResultRow>
+            <Button variant="primary" onClick={() => navigate('tasks')}>
+              <span className="btn-icon-text">去执行记录跟踪 <IconArrowRight size={13} /></span>
+            </Button>
           </div>
         </Card>
       )}
 
       <Card title="提案列表" subtitle="当前租户在本会话创建或跟进过的提案；从这里可以继续未完成的流程">
         {tenantChangeSets.length === 0 ? (
-          <p className="muted">暂无提案——在第一步起草并提交后出现在这里</p>
+          <div className="empty">
+            <div className="empty-text">暂无提案——在第一步起草并提交后出现在这里</div>
+            <div className="empty-action">
+              <Button variant="primary" onClick={() => setStep(1)}>开始起草提案</Button>
+            </div>
+          </div>
         ) : (
           <table className="table">
             <thead><tr><th>编号</th><th>状态</th><th>版本</th><th>授权凭证</th><th>创建时间</th><th></th></tr></thead>
@@ -411,10 +440,10 @@ export function Proposals() {
               {tenantChangeSets.map((c) => (
                 <tr key={c.id}>
                   <td><MonoText>{c.id}</MonoText></td>
-                  <td>{c.status ? <Badge tone="info">{c.status}</Badge> : '—'}</td>
+                  <td>{c.status ? <StatusBadge status={c.status} fallbackLabel={c.status} /> : '—'}</td>
                   <td>{c.proposalVersion ? `v${c.proposalVersion}` : '—'}</td>
                   <td>{c.authorizationId ? <MonoText>{c.authorizationId}</MonoText> : <span className="muted">未授权</span>}</td>
-                  <td>{c.createdAt}</td>
+                  <td className="muted">{c.createdAt}</td>
                   <td>
                     <Button className="btn-xs" onClick={() => void loadFromList(c.id, c)}>继续处理</Button>
                   </td>

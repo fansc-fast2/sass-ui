@@ -4,13 +4,17 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { cancelJob, createRestoreProposals, getExecution, getJob } from '../api/api'
+import { idempotencyScopeFor } from '../api/idempotency'
 import type { ExecutionView, JobDetail } from '../api/types'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
+import { toast } from '../components/Toast'
+import { JobStatusBadge, StatusBadge } from '../components/StatusBadge'
 import {
   Badge, Button, Card, ErrorBanner, Field, MonoText, ResultRow, TextArea, TextInput,
 } from '../components/ui'
+import { IconArrowRight } from '../components/icons'
 
 export function ActivityPanels() {
   const { hasScope } = useSession()
@@ -70,8 +74,9 @@ export function ActivityPanels() {
     const res = await run('POST', `/v1/jobs/${target}/cancel`, () =>
       cancelJob(target, { reason: cancelReason }))
     if (res) {
-      setCancelResult(`${res.data.job_id} → ${res.data.status}（取消是请求，不保证立即生效）`)
+      setCancelResult(`${res.data.job_id}：当前状态 ${res.data.status}（取消是请求，不保证立即生效）`)
       updateJobStatus(res.data.job_id, res.data.status)
+      toast.info(`取消请求已受理（${res.data.status}）：取消是请求，不保证立即生效`)
     }
   }
 
@@ -94,10 +99,14 @@ export function ActivityPanels() {
       return
     }
     const res = await run('POST', `/v1/executions/${target}/restore-proposals`, () =>
-      createRestoreProposals(target, { execution_item_ids: ids, reason: restoreReason, baseline: 'published_baseline' }))
+      createRestoreProposals(target, { execution_item_ids: ids, reason: restoreReason, baseline: 'published_baseline' }, {
+        // 10 §5：恢复请求用稳定幂等键（同执行 + 同失败项 + 同理由重试不产生重复提案）
+        idempotencyScope: idempotencyScopeFor('exec-restore', target, { ids, reason: restoreReason }),
+      }))
     if (res) {
       upsertChangeSet({ id: res.data.change_set_id, status: res.data.status })
       setRestoreResult(`已生成恢复提案 ${res.data.change_set_id}（${res.data.status}）`)
+      toast.ok(`恢复提案已生成：${res.data.change_set_id}（${res.data.status}）`)
     }
   }
 
@@ -127,7 +136,7 @@ export function ActivityPanels() {
         {polled && (
           <div className="result-col">
             <ResultRow label="任务编号"><MonoText>{polled.id}</MonoText></ResultRow>
-            <ResultRow label="状态"><Badge tone="info">{polled.status}</Badge></ResultRow>
+            <ResultRow label="状态"><JobStatusBadge status={polled.status} /></ResultRow>
             {/* v1.6 F02：result 按任务类型聚合，不同类型互不混用 */}
             {polled.result && (
               <ResultRow label="分项聚合">
@@ -158,7 +167,7 @@ export function ActivityPanels() {
                   <td><MonoText>{j.jobId}</MonoText></td>
                   <td>{j.kind === 'sync' ? '同步' : j.kind === 'audit' ? '审计' : '取消'}</td>
                   <td>{j.createdAt}</td>
-                  <td>{j.lastStatus ? <Badge tone="info">{j.lastStatus}</Badge> : '—'}</td>
+                  <td>{j.lastStatus ? <JobStatusBadge status={j.lastStatus} /> : '—'}</td>
                   <td><Button className="btn-xs" onClick={() => { setLookupId(j.jobId); void lookup(j.jobId) }}>查询</Button></td>
                 </tr>
               ))}
@@ -212,9 +221,7 @@ export function ActivityPanels() {
                         <td><MonoText>{String(it.id ?? '—')}</MonoText></td>
                         <td>{String(it.layer ?? '—')}</td>
                         <td>
-                          <Badge tone={status === 'passed' ? 'ok' : status === 'failed' ? 'err' : status === 'pending' ? 'neutral' : 'warn'}>
-                            {status || '—'}
-                          </Badge>
+                          <StatusBadge status={status} fallbackLabel={status || '—'} />
                         </td>
                         <td>{it.required ? '必须' : '可选'}</td>
                         <td className="muted">{String(it.check_version ?? '—')}</td>
@@ -236,7 +243,7 @@ export function ActivityPanels() {
                 <tr key={e.executionId}>
                   <td><MonoText>{e.executionId}</MonoText></td>
                   <td><MonoText>{e.jobId ?? '—'}</MonoText></td>
-                  <td>{e.status ? <Badge tone="info">{e.status}</Badge> : '—'}</td>
+                  <td>{e.status ? <StatusBadge status={e.status} fallbackLabel={e.status} /> : '—'}</td>
                   <td>{e.createdAt}</td>
                   <td><Button className="btn-xs" onClick={() => { setExecId(e.executionId); void queryExecution(e.executionId) }}>详情</Button></td>
                 </tr>
@@ -266,7 +273,9 @@ export function ActivityPanels() {
           {restoreResult && (
             <div className="row gap">
               <span><Badge tone="ok">完成</Badge> <MonoText>{restoreResult}</MonoText></span>
-              <Button variant="ghost" onClick={() => navigate('optimization')}>去优化提案继续流程 →</Button>
+              <Button variant="ghost" onClick={() => navigate('optimization')}>
+                <span className="btn-icon-text">去优化提案继续流程 <IconArrowRight size={13} /></span>
+              </Button>
             </div>
           )}
         </div>

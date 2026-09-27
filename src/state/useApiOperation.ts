@@ -1,9 +1,12 @@
 // 页面级 API 调用封装：loading/错误状态 + 自动写操作日志（含 request_id）。
+// 操作失败时统一弹出 toast（code + message + request_id），与页面内
+// ErrorBanner 双通道反馈；错误详情仍以页面内 ErrorBanner 为准。
 
 import { useCallback, useState } from 'react'
 import { ApiRequestError } from '../api/client'
 import type { ApiResult } from '../api/client'
 import { useAppState } from './AppStateContext'
+import { toast } from '../components/Toast'
 
 export function useApiOperation() {
   const { logOp } = useAppState()
@@ -25,6 +28,7 @@ export function useApiOperation() {
         } else {
           logOp({ method, path, status: 'ERR', elapsedMs: 0 })
         }
+        toast.errorFrom(e)
         return null
       } finally {
         setLoading(false)

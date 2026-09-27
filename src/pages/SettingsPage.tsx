@@ -12,6 +12,8 @@ import type { TenantMember, TenantUsageBucket, TenantSupportGrant } from '../api
 import { Badge, Button, Card, Field, MonoText, Select, TextInput } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { LoginFlow } from '../components/LoginFlow'
+import { IconCheck, IconPlus, IconX } from '../components/icons'
+import { toast } from '../components/Toast'
 import { PERM_LABELS, ROLE_LABELS } from '../session/permissions'
 import { useSession } from '../session/SessionContext'
 
@@ -74,7 +76,7 @@ export function SettingsPage() {
       <UsageCard tenantId={active?.tenantId ?? ''} />
       <SupportGrantsCard isAdmin={isAdmin} tenantId={active?.tenantId ?? ''} />
 
-      <Card title="接口一览" subtitle="后端 devkit v1.8 的 31 个 /v1 操作；✓ = 当前角色具备所需权限">
+      <Card title="接口一览" subtitle="后端 devkit v1.8 的 31 个 /v1 操作；「当前角色」列显示该角色是否具备所需权限">
         <table className="table">
           <thead><tr><th>方法</th><th>路径</th><th>所需权限</th><th>当前角色</th></tr></thead>
           <tbody>
@@ -83,7 +85,11 @@ export function SettingsPage() {
                 <td><Badge tone={r.method === 'GET' ? 'neutral' : 'info'}>{r.method}</Badge></td>
                 <td><MonoText>{r.path}</MonoText></td>
                 <td>{r.perm}{PERM_LABELS[r.perm] ? ` · ${PERM_LABELS[r.perm]}` : ''}</td>
-                <td>{hasScope(r.perm) ? <Badge tone="ok">✓</Badge> : <Badge tone="warn">✗</Badge>}</td>
+                <td>
+                  {hasScope(r.perm)
+                    ? <span className="status-badge status-ok shape-dot" title="当前角色具备所需权限"><span className="status-shape" aria-hidden /><span className="status-icon" aria-hidden><IconCheck size={11} /></span>有权限</span>
+                    : <span className="status-badge status-warn shape-triangle" title="当前角色缺少所需权限，需要更高角色"><span className="status-shape" aria-hidden /><span className="status-icon" aria-hidden><IconX size={11} /></span>需更高角色</span>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -118,6 +124,7 @@ function TenantInfoCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: str
       setName(res.data.name)
       setRowVersion(res.data.row_version)
       setMsg('已保存')
+      toast.ok('租户信息已保存')
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
 
@@ -205,7 +212,9 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
       )}
       {isAdmin && (
         <div className="row gap wrap">
-          <Button variant="primary" onClick={() => setShowInvite(true)}>＋ 邀请成员</Button>
+          <Button variant="primary" onClick={() => setShowInvite(true)}>
+            <span className="btn-icon-text"><IconPlus size={13} /> 邀请成员</span>
+          </Button>
         </div>
       )}
       {showInvite && isAdmin && (

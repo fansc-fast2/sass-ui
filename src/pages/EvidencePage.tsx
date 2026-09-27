@@ -4,8 +4,10 @@
 import { useState } from 'react'
 import { getEvidence, listEvidence } from '../api/api'
 import type { EvidenceDetail } from '../api/types'
-import { ListState } from '../components/ListState'
 import { Badge, Button, Card, ErrorBanner, MonoText, ResultRow, TextInput } from '../components/ui'
+import { DataTable } from '../components/DataTable'
+import type { Column } from '../components/DataTable'
+import { FullTime } from '../components/RelativeTime'
 import { useSession } from '../session/SessionContext'
 import { useApiOperation } from '../state/useApiOperation'
 
@@ -38,6 +40,36 @@ export function EvidencePage() {
     if (res) setSelected(res.data)
   }
 
+  const columns: Column<EvidenceDetail>[] = [
+    {
+      key: 'id',
+      header: '证据',
+      render: (ev) => <MonoText>{ev.id}</MonoText>,
+      sortValue: (ev) => ev.id,
+      ellipsis: 200,
+      titleOf: (ev) => ev.id,
+    },
+    {
+      key: 'product_id',
+      header: '适用商品',
+      render: (ev) => <MonoText>{ev.product_id}</MonoText>,
+      sortValue: (ev) => ev.product_id,
+    },
+    { key: 'source_version', header: '来源版本', render: (ev) => ev.source_version, sortValue: (ev) => ev.source_version },
+    { key: 'access', header: '访问级别', render: (ev) => <Badge tone="neutral">{ev.access}</Badge>, sortValue: (ev) => ev.access },
+    {
+      key: 'public_disclosure',
+      header: '公开使用',
+      render: (ev) => <Badge tone={ev.public_disclosure === 'approved' ? 'ok' : 'warn'}>{ev.public_disclosure}</Badge>,
+      sortValue: (ev) => ev.public_disclosure,
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (ev) => <Button className="btn-xs" onClick={() => void open(ev.id)}>详情</Button>,
+    },
+  ]
+
   return (
     <div className="page">
       <ErrorBanner error={error} />
@@ -53,31 +85,16 @@ export function EvidencePage() {
           <Button variant="primary" disabled={!canRead || loading} onClick={() => void query()}>
             {loading ? '查询中…' : '查询'}
           </Button>
-          {nextCursor && <Button disabled={loading} onClick={() => void query(nextCursor)}>下一页</Button>}
         </div>
         {!canRead && <p className="muted">当前角色缺少 knowledge.read 权限。</p>}
-        <ListState
-          loading={loading && loaded}
-          error={null}
-          count={items.length}
-          empty={loaded ? '没有可见证据（按当前权限过滤）' : '按商品筛选或直接查询'}
-        >
-          <table className="table">
-            <thead><tr><th>证据</th><th>适用商品</th><th>来源版本</th><th>访问级别</th><th>公开使用</th><th></th></tr></thead>
-            <tbody>
-              {items.map((ev) => (
-                <tr key={ev.id}>
-                  <td><MonoText>{ev.id}</MonoText></td>
-                  <td><MonoText>{ev.product_id}</MonoText></td>
-                  <td>{ev.source_version}</td>
-                  <td><Badge tone="neutral">{ev.access}</Badge></td>
-                  <td><Badge tone={ev.public_disclosure === 'approved' ? 'ok' : 'warn'}>{ev.public_disclosure}</Badge></td>
-                  <td><Button className="btn-xs" onClick={() => void open(ev.id)}>详情</Button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ListState>
+        <DataTable
+          columns={columns}
+          rows={items}
+          getRowKey={(ev) => ev.id}
+          initialSortKey="product_id"
+          empty={loaded ? '没有可见证据——结果按当前身份与站点权限过滤；换有权限的账号或调整商品筛选' : '按商品筛选或直接查询可见证据'}
+          footerExtra={nextCursor ? <Button className="btn-xs" disabled={loading} onClick={() => void query(nextCursor)}>加载下一页</Button> : null}
+        />
       </Card>
 
       {selected && (
@@ -93,7 +110,7 @@ export function EvidencePage() {
             <ResultRow label="来源哈希">
               {selected.source_hash ? <MonoText>{selected.source_hash.slice(0, 24)}…</MonoText> : <span className="muted">（元数据层不返回内容哈希）</span>}
             </ResultRow>
-            <ResultRow label="观测时间">{selected.observed_at}</ResultRow>
+            <ResultRow label="观测时间"><FullTime value={selected.observed_at} fallback={selected.observed_at} /></ResultRow>
             <ResultRow label="摘录">
               {selected.can_view_excerpt && selected.excerpt
                 ? <span>{selected.excerpt}</span>

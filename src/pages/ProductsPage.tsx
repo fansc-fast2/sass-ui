@@ -5,8 +5,10 @@
 import { useEffect, useState } from 'react'
 import { listProducts } from '../api/api'
 import type { ProductSummary } from '../api/types'
-import { ListState } from '../components/ListState'
 import { Badge, Button, Card, ErrorBanner, Field, TextInput, Select } from '../components/ui'
+import { DataTable } from '../components/DataTable'
+import type { Column } from '../components/DataTable'
+import { RelativeTime } from '../components/RelativeTime'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
@@ -56,6 +58,52 @@ export function ProductsPage() {
     }
   }
 
+  const columns: Column<ProductSummary>[] = [
+    {
+      key: 'name',
+      header: '名称 / 型号',
+      render: (p) => (<span className="cell-strong"><strong>{p.name}</strong>{p.model ? <span className="muted"> / {p.model}</span> : null}</span>),
+      sortValue: (p) => p.name,
+      ellipsis: 260,
+      titleOf: (p) => (p.model ? `${p.name} / ${p.model}` : p.name),
+    },
+    {
+      key: 'connection',
+      header: '来源连接',
+      render: (p) => <code className="mono">{p.connection_id}</code>,
+      sortValue: (p) => p.connection_id,
+    },
+    {
+      key: 'sites',
+      header: '站点',
+      render: (p) => p.site_ids.join(', ') || '—',
+      sortValue: (p) => p.site_ids.join(','),
+    },
+    {
+      key: 'synced_at',
+      header: '同步时间',
+      render: (p) => <span className="muted"><RelativeTime value={p.synced_at} fallback={p.synced_at} /></span>,
+      sortValue: (p) => p.synced_at ?? '',
+    },
+    {
+      key: 'freshness',
+      header: '新鲜度',
+      render: (p) => (
+        <Badge tone={p.freshness === 'current' ? 'ok' : p.freshness === 'stale' ? 'warn' : 'neutral'}>
+          {FRESHNESS_LABELS[p.freshness] ?? p.freshness}
+        </Badge>
+      ),
+      sortValue: (p) => p.freshness,
+    },
+    { key: 'knowledge_status', header: '知识状态', render: (p) => p.knowledge_status, sortValue: (p) => p.knowledge_status },
+    { key: 'issues', header: '可见问题', render: (p) => p.visible_issue_count, sortValue: (p) => p.visible_issue_count },
+    {
+      key: 'actions',
+      header: '',
+      render: (p) => <Button className="btn-xs" onClick={() => navigate('product-detail', p.id)}>详情</Button>,
+    },
+  ]
+
   return (
     <div className="page">
       <ErrorBanner error={error} />
@@ -88,30 +136,17 @@ export function ProductsPage() {
         </div>
         {!canRead && <p className="muted">当前角色缺少 knowledge.read 权限。</p>}
 
-        <ListState
-          loading={loading && loaded}
-          error={null}
-          count={items.length}
-          empty={loaded ? '没有匹配的商品——当前后端为骨架数据源，商品投影接入后此处展示真实目录' : '输入筛选条件后点击查询'}
-        >
-          <table className="table">
-            <thead><tr><th>名称/型号</th><th>来源连接</th><th>站点</th><th>同步时间</th><th>新鲜度</th><th>知识状态</th><th>可见问题</th><th></th></tr></thead>
-            <tbody>
-              {items.map((p) => (
-                <tr key={p.id}>
-                  <td><strong>{p.name}</strong>{p.model ? <span className="muted"> / {p.model}</span> : null}</td>
-                  <td><code className="mono">{p.connection_id}</code></td>
-                  <td>{p.site_ids.join(', ') || '—'}</td>
-                  <td className="muted">{p.synced_at}</td>
-                  <td><Badge tone={p.freshness === 'current' ? 'ok' : p.freshness === 'stale' ? 'warn' : 'neutral'}>{FRESHNESS_LABELS[p.freshness] ?? p.freshness}</Badge></td>
-                  <td>{p.knowledge_status}</td>
-                  <td>{p.visible_issue_count}</td>
-                  <td><Button className="btn-xs" onClick={() => navigate('product-detail', p.id)}>详情</Button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ListState>
+        <DataTable
+          columns={columns}
+          rows={items}
+          getRowKey={(p) => p.id}
+          onRowClick={(p) => navigate('product-detail', p.id)}
+          initialSortKey="name"
+          empty={loaded
+            ? '没有匹配的商品——可调整关键词或站点筛选；后端商品投影接入后此处展示真实目录'
+            : '输入筛选条件后点击查询，或直接在下方用商品 ID 打开详情'}
+          footerExtra={nextCursor ? <Button className="btn-xs" disabled={!canRead || loading} onClick={() => void query(nextCursor)}>加载下一页</Button> : null}
+        />
       </Card>
 
       <Card title="直接打开商品" subtitle="列表数据接入前，可用商品 ID 直接进入详情页完成检查与提案流程">

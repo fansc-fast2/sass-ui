@@ -1,9 +1,10 @@
 // 轻量 UI 原语：卡片、字段、按钮、徽标、横幅、JSON 视图、空态、加载。
 // 不引第三方组件库，样式集中在 styles.css。
 
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { useState } from 'react'
 import { ApiRequestError, NetworkError } from '../api/client'
+import { IconCheck } from './icons'
 
 export function Card({ title, subtitle, actions, children }: {
   title?: string
@@ -39,8 +40,9 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   )
 }
 
-export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className="input" {...props} />
+// React 19：函数组件直接接收 ref prop（无需 forwardRef）
+export function TextInput({ ref, ...props }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
+  return <input ref={ref} className="input" {...props} />
 }
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -97,8 +99,15 @@ export function ErrorBanner({ error }: { error: unknown }) {
   return <Banner tone="err" title="未知错误">{String(error)}</Banner>
 }
 
-export function EmptyState({ text }: { text: string }) {
-  return <div className="empty">{text}</div>
+/** 空态：说明 + 下一步动作入口（SaaS 化：空态不给裸 0，也不堆感叹号）。 */
+export function EmptyState({ text, hint, action }: { text: ReactNode; hint?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="empty">
+      <div className="empty-text">{text}</div>
+      {hint && <div className="empty-hint">{hint}</div>}
+      {action && <div className="empty-action">{action}</div>}
+    </div>
+  )
 }
 
 export function Loading({ text = '加载中…' }: { text?: string }) {
@@ -123,7 +132,8 @@ export function JsonView({ value, label }: { value: unknown; label?: string }) {
         {label && <span>{label}</span>}
         <button className="btn btn-ghost btn-xs" onClick={copy}>{copied ? '已复制' : '复制'}</button>
       </div>
-      <pre>{text}</pre>
+      {/* tabIndex=0：Diff/长 JSON 区可键盘聚焦后用方向键滚动 */}
+      <pre tabIndex={0}>{text}</pre>
     </div>
   )
 }
@@ -152,7 +162,7 @@ export function StatCard({ label, value, sub }: { label: string; value: ReactNod
   )
 }
 
-/** 向导步骤条。 */
+/** 向导步骤条：已完成步骤用 SVG 对勾（不用字符符号）。 */
 export function Steps({ current, labels }: { current: number; labels: string[] }) {
   return (
     <ol className="steps">
@@ -160,8 +170,8 @@ export function Steps({ current, labels }: { current: number; labels: string[] }
         const n = i + 1
         const state = n < current ? 'done' : n === current ? 'active' : 'todo'
         return (
-          <li key={label} className={`step step-${state}`}>
-            <span className="step-dot">{n < current ? '✓' : n}</span>
+          <li key={label} className={`step step-${state}`} aria-current={n === current ? 'step' : undefined}>
+            <span className="step-dot">{n < current ? <IconCheck size={11} /> : n}</span>
             <span>{label}</span>
           </li>
         )
@@ -170,9 +180,9 @@ export function Steps({ current, labels }: { current: number; labels: string[] }
   )
 }
 
-/** 工作台快捷入口卡。 */
+/** 工作台快捷入口卡。icon 为内联 SVG（icons.tsx），不用 emoji。 */
 export function ActionCard({ icon, title, desc, onClick }: {
-  icon: string
+  icon: ReactNode
   title: string
   desc: string
   onClick: () => void

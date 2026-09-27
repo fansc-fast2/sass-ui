@@ -10,6 +10,7 @@ import { useApiOperation } from '../state/useApiOperation'
 import {
   Badge, Button, Card, EmptyState, ErrorBanner, Field, JsonView, MonoText, ResultRow, TextArea, TextInput,
 } from '../components/ui'
+import { FullTime } from '../components/RelativeTime'
 
 const CHECK_STATUS_TONE: Record<string, 'ok' | 'warn' | 'err' | 'neutral'> = {
   pass: 'ok',
@@ -189,7 +190,7 @@ export function AnswerQuality() {
                   <td>{r.evidenced_claims}</td>
                   <td>{r.unpublishable_claims.length}</td>
                   <td><Badge tone={r.coverage === 'complete' ? 'ok' : 'warn'}>{r.coverage}</Badge></td>
-                  <td className="muted">{new Date(r.checked_at).toLocaleString()}</td>
+                  <td className="muted"><FullTime value={r.checked_at} /></td>
                 </tr>
               ))}
             </tbody>

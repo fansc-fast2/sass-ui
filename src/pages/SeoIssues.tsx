@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { dismissIssue, listIssues, verifyFact } from '../api/api'
 import type { IssueList } from '../api/types'
+import { toast } from '../components/Toast'
 import { useSession } from '../session/SessionContext'
 import { useApiOperation } from '../state/useApiOperation'
 import {
@@ -58,14 +59,20 @@ export function SeoIssues() {
         reason: dismissReason,
         expected_version: Number.isFinite(version) ? version : 0,
       }))
-    if (res) setActionResult(`问题 ${res.data.id} 已豁免（${res.data.status}）`)
+    if (res) {
+      setActionResult(`问题 ${res.data.id} 已豁免（${res.data.status}）`)
+      toast.ok(`问题 ${res.data.id} 已豁免（${res.data.status}）`)
+    }
   }
 
   const submitVerify = async () => {
     if (!verifyFactId.trim()) return
     const res = await run('POST', `/v1/facts/${verifyFactId.trim()}/verify`, () =>
       verifyFact(verifyFactId.trim(), { public_use: verifyPublic, note: verifyNote }))
-    if (res) setActionResult(`事实 ${res.data.id} 核验完成（${res.data.status}）`)
+    if (res) {
+      setActionResult(`事实 ${res.data.id} 核验完成（${res.data.status}）`)
+      toast.ok(`事实 ${res.data.id} 核验完成（${res.data.status}）`)
+    }
   }
 
   return (

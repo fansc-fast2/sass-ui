@@ -10,6 +10,8 @@ import {
 } from './opsClient'
 import type { OpsTenant, UsageRow, AuditEntryView } from './opsClient'
 import { Modal } from '../components/Modal'
+import { ToastHost } from '../components/Toast'
+import { IconChevronLeft, IconPlus } from '../components/icons'
 import PluginsPage from './PluginsPage'
 import SupportPage from './SupportPage'
 
@@ -58,7 +60,12 @@ export default function OpsApp() {
 
   if (!booted) return <div className="ops-boot">检测会话中…</div>
   if (!user) return <OpsLogin onLogin={setUser} />
-  return <OpsShell user={user} onLogout={() => { setOpsToken(null); setUser(null) }} />
+  return (
+    <>
+      <OpsShell user={user} onLogout={() => { setOpsToken(null); setUser(null) }} />
+      <ToastHost />
+    </>
+  )
 }
 
 // 登录两步：Identity 登录（dev 适配器）→ 交换 Ops 会话（需平台角色授权）
@@ -262,7 +269,9 @@ function TenantsPage() {
         <div className="card">
           <div className="card-body">
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <button className="btn btn-ghost" onClick={() => setView('list')}>← 返回列表</button>
+              <button className="btn btn-ghost" onClick={() => setView('list')}>
+                <span className="btn-icon-text"><IconChevronLeft size={13} /> 返回列表</span>
+              </button>
               <span className={`badge badge-${STATUS_TONES[detail.status] ?? 'neutral'}`}>{detail.status}</span>
             </div>
             {detailError && <div className="banner banner-err">{detailError}</div>}
@@ -298,7 +307,9 @@ function TenantsPage() {
         <div className="card-body">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <strong>租户目录</strong>
-            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>＋ 新增租户</button>
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              <span className="btn-icon-text"><IconPlus size={13} /> 新增租户</span>
+            </button>
           </div>
           <div className="row gap wrap">
             <input className="input" style={{ width: 180 }} placeholder="租户名称" value={q} onChange={(e) => setQ(e.target.value)} />

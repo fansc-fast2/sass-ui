@@ -10,6 +10,7 @@ import {
 } from './opsClient'
 import type { ChannelInstallRow, PluginsOverview } from './opsClient'
 import { Modal } from '../components/Modal'
+import { IconArrowRight, IconPlus } from '../components/icons'
 
 const INSTALL_TONES: Record<string, string> = { active: 'badge-ok', uninstalled: 'badge-neutral' }
 
@@ -66,7 +67,7 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
         canonical_shop_domain: newDomain.trim() || newShop.trim(),
         channel_app_registration_id: newReg.trim(),
       })
-      setCreateMsg(`已绑定 ${ci.shop_stable_id} → ${ci.tenant_id}（epoch ${ci.installation_epoch}）`)
+      setCreateMsg(`已绑定 ${ci.shop_stable_id}（租户 ${ci.tenant_id}，epoch ${ci.installation_epoch}）`)
       setNewShop('')
       setNewDomain('')
       setShowCreate(false)
@@ -131,7 +132,9 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
         <div className="card-body">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <strong>渠道安装</strong>
-            <button className="btn btn-primary" disabled={!isAdmin} onClick={() => setShowCreate(true)}>＋ 注册安装</button>
+            <button className="btn btn-primary" disabled={!isAdmin} onClick={() => setShowCreate(true)}>
+              <span className="btn-icon-text"><IconPlus size={13} /> 注册安装</span>
+            </button>
           </div>
           <div className="row gap wrap">
             <select className="input select" style={{ width: 150 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -182,7 +185,9 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
 
             <div className="result-col">
               <div className="result-row"><span className="result-label">店铺 / 租户</span>
-                <span className="result-value"><code className="mono">{detail.shop_stable_id}</code> → <code className="mono">{detail.tenant_id}</code>
+                <span className="result-value"><code className="mono">{detail.shop_stable_id}</code>
+                  <span className="inline-arrow" aria-hidden><IconArrowRight size={12} /></span>
+                  <code className="mono">{detail.tenant_id}</code>
                   {detail.tenant && <>（{detail.tenant.name} · <span className={`badge ${STATUS_TONES[detail.tenant.status] ?? 'badge-neutral'}`}>{detail.tenant.status}</span> · {detail.tenant.plan_id || '无套餐'}）</>}
                 </span></div>
               <div className="result-row"><span className="result-label">授权状态</span>
