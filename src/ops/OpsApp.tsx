@@ -9,6 +9,7 @@ import {
   opsUsageOverview, opsCreateUsageExport, opsDownloadUsageExport, opsSearchAudit,
 } from './opsClient'
 import type { OpsTenant, UsageRow, AuditEntryView } from './opsClient'
+import PluginsPage from './PluginsPage'
 
 const STATUS_TONES: Record<string, 'ok' | 'warn' | 'err' | 'neutral'> = {
   active: 'ok',
@@ -32,7 +33,7 @@ const NEXT_ACTIONS: Record<string, { to: string; label: string }[]> = {
   closed: [],
 }
 
-type OpsPage = 'tenants' | 'usage' | 'audit'
+type OpsPage = 'tenants' | 'plugins' | 'usage' | 'audit'
 
 export default function OpsApp() {
   const [user, setUser] = useState<{ subject: string; role: string } | null>(null)
@@ -125,6 +126,10 @@ function OpsShell({ user, onLogout }: { user: { subject: string; role: string };
               <span>租户管理</span>
               <em>租户列表 · 生命周期</em>
             </button>
+            <button className={`nav-item ${page === 'plugins' ? 'active' : ''}`} onClick={() => setPage('plugins')}>
+              <span>插件管理</span>
+              <em>安装绑定 · 用户 · 付费估算</em>
+            </button>
             <button className={`nav-item ${page === 'usage' ? 'active' : ''}`} onClick={() => setPage('usage')}>
               <span>用量与费用</span>
               <em>聚合 · 成本估算 · 导出</em>
@@ -144,10 +149,14 @@ function OpsShell({ user, onLogout }: { user: { subject: string; role: string };
       <div className="main">
         <header className="topbar">
           <div>
-            <h1>{page === 'tenants' ? '租户管理' : page === 'usage' ? '用量与费用' : '安全审计'}</h1>
+            <h1>
+              {page === 'tenants' ? '租户管理' : page === 'plugins' ? '插件管理'
+                : page === 'usage' ? '用量与费用' : '安全审计'}
+            </h1>
             <p className="topbar-sub">
               {page === 'usage' ? '聚合为权限受控查询；成本为参考估算（estimated），非账单'
                 : page === 'audit' ? '平台操作审计（采集自第一天）'
+                : page === 'plugins' ? '渠道安装绑定 · 插件用户（绑定租户成员）· 计量与参考成本（非账单）'
                 : '平台管理功能不隶属任何租户；支持访问需短期授权与审计'}
             </p>
           </div>
@@ -161,6 +170,7 @@ function OpsShell({ user, onLogout }: { user: { subject: string; role: string };
         </header>
         <main className="content">
           {page === 'tenants' && <TenantsPage />}
+          {page === 'plugins' && <PluginsPage isAdmin={user.role === 'platform_admin'} />}
           {page === 'usage' && <UsagePage isFinance={user.role === 'platform_admin' || user.role === 'platform_finance'} />}
           {page === 'audit' && <AuditPage />}
         </main>

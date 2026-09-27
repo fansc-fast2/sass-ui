@@ -404,6 +404,49 @@ check('GET /v1/seo/answer-reviews', seoReviewList.status === 200 && data(seoRevi
 
 seoTarget.close()
 
+// ---- 12. 插件管理（运营面 /ops/v1/plugins + channel-installations） ----
+const pluginsNoAuth = await call('GET', '/ops/v1/plugins/overview', { auth: false })
+check('插件总览无会话 → 401', pluginsNoAuth.status === 401, `status=${pluginsNoAuth.status}`)
+
+const pluginsByTenant = await call('GET', '/ops/v1/plugins/overview', { headers: { Authorization: `Bearer ${tenantToken}` } })
+check('tenant 会话请求插件总览 → 401（上下文隔离）', pluginsByTenant.status === 401, `status=${pluginsByTenant.status}`)
+
+const pluginsOverview = await call('GET', '/ops/v1/plugins/overview', { headers: { Authorization: `Bearer ${opsToken}` } })
+check('GET /ops/v1/plugins/overview', pluginsOverview.status === 200
+  && data(pluginsOverview)?.installations?.active >= 1
+  && Array.isArray(data(pluginsOverview)?.registrations),
+  `active=${data(pluginsOverview)?.installations?.active}`)
+
+const allInstalls = await call('GET', '/ops/v1/channel-installations', { headers: { Authorization: `Bearer ${opsToken}` } })
+check('GET /ops/v1/channel-installations（全量）', allInstalls.status === 200 && data(allInstalls)?.count >= 1,
+  `count=${data(allInstalls)?.count}`)
+const seededInstall = (data(allInstalls)?.items ?? []).find((ci) => ci.shop_stable_id === 'shop-127-0-0-1-1339')
+
+const installDetail = seededInstall
+  ? await call('GET', `/ops/v1/channel-installations/${seededInstall.id}`, { headers: { Authorization: `Bearer ${opsToken}` } })
+  : { status: 0, json: null }
+check('GET channel-installations/{id}（详情聚合）', installDetail.status === 200
+  && !!data(installDetail)?.tenant
+  && Array.isArray(data(installDetail)?.executors)
+  && Array.isArray(data(installDetail)?.cost_estimate?.lines),
+  `status=${installDetail.status} executors=${data(installDetail)?.executors?.length}`)
+
+const installMissing = await call('GET', '/ops/v1/channel-installations/ci_nope', { headers: { Authorization: `Bearer ${opsToken}` } })
+check('缺失安装详情 → 404', installMissing.status === 404, `status=${installMissing.status}`)
+
+if (seededInstall) {
+  const rebinding = await call('POST', '/ops/v1/channel-installations', {
+    headers: { Authorization: `Bearer ${opsToken}` },
+    body: {
+      tenant_id: seededInstall.tenant_id, shop_stable_id: seededInstall.shop_stable_id,
+      canonical_shop_domain: seededInstall.canonical_shop_domain,
+      channel_app_registration_id: seededInstall.registration_id,
+    },
+  })
+  check('POST channel-installations（幂等重绑 → 200 同一绑定）', rebinding.status === 200 && data(rebinding)?.id === seededInstall.id,
+    `status=${rebinding.status} id_match=${data(rebinding)?.id === seededInstall.id}`)
+}
+
 // ---- 汇总 ----
 console.log(`\n${failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`}`)
 process.exit(failures === 0 ? 0 : 1)

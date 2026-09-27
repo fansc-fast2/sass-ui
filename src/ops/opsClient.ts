@@ -150,6 +150,68 @@ export const opsDownloadUsageExport = async (id: string): Promise<string> => {
 export const opsSearchAudit = (query: { actor?: string; action?: string; target?: string } = {}) =>
   opsRequest<{ items: AuditEntryView[]; total_matched: number }>('GET', '/ops/v1/audit' + qs(query))
 
+// ---- 插件管理（渠道安装绑定 / 插件用户 / 计量与参考成本） ----
+// 诚实边界：付费情况为计量聚合 + 参考价估算（estimated），非账单；
+// 插件用户 = 绑定租户的平台成员；插件业务端内用户平台侧暂不可见。
+
+export interface PluginManifestView {
+  plugin_key: string
+  plugin_version: string
+  supported_channels: string[]
+  usage_metrics: string[]
+}
+
+export interface PluginsOverview {
+  registrations: PluginManifestView[]
+  installations: { active: number; uninstalled: number }
+  tenants_with_plugin: number
+  kernel_installations: number
+}
+
+export interface ChannelInstallRow {
+  id: string
+  tenant_id: string
+  shop_stable_id: string
+  canonical_shop_domain: string
+  registration_id: string
+  status: string
+  installation_epoch: number
+  auth_status: string
+  installed_at: string
+  uninstalled_at?: string
+  tenant?: { id: string; name: string; status: string; plan_id: string }
+  members?: { membership_id: string; subject_id: string; role: string; status: string; joined_at: string }[]
+  executors?: { executor_id: string; site_id: string; audience: string; status: string; protocol_range: string }[]
+  plugin_installations?: { id: string; plugin_key: string; plugin_version: string; status: string; installation_epoch: number; site_id: string }[]
+  usage?: { metric: string; unit: string; total: number; by_quality: Record<string, number>; event_count: number; last_at: string }[]
+  cost_estimate?: {
+    lines: { metric: string; quantity: number; unit: string; unit_price: number; estimated_cost: number; currency: string; price_version: string; estimated: boolean; unknown_qty: number }[]
+    estimated_total: number
+    currency: string
+    note: string
+  }
+}
+
+export const opsPluginsOverview = () => opsRequest<PluginsOverview>('GET', '/ops/v1/plugins/overview')
+
+export const opsListChannelInstallations = (query: { tenant_id?: string; status?: string; registration_id?: string } = {}) =>
+  opsRequest<{ items: ChannelInstallRow[]; count: number }>('GET', '/ops/v1/channel-installations' + qs(query))
+
+export const opsCreateChannelInstallation = (body: {
+  tenant_id: string
+  shop_stable_id: string
+  canonical_shop_domain: string
+  channel_app_registration_id: string
+}) => opsRequest<ChannelInstallRow>('POST', '/ops/v1/channel-installations', body)
+
+export const opsChannelInstallationDetail = (id: string) =>
+  opsRequest<ChannelInstallRow>('GET', `/ops/v1/channel-installations/${encodeURIComponent(id)}`)
+
+// 卸载响应为旧 payload 形状（channel_app_registration_id 键名），UI 卸载后
+// 统一刷新列表，因此只声明会用到的字段。
+export const opsUninstallChannelInstallation = (body: { channel_app_registration_id: string; shop_stable_id: string }) =>
+  opsRequest<{ id: string; status: string; installation_epoch: number }>('POST', '/ops/v1/channel-installations/uninstall', body)
+
 function qs(query: Record<string, string | undefined>): string {
   const sp = new URLSearchParams()
   for (const [k, v] of Object.entries(query)) if (v) sp.set(k, v)
