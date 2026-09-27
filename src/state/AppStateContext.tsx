@@ -90,6 +90,7 @@ interface AppStateContextValue {
   opLog: OpLogEntry[]
   logOp: (entry: Omit<OpLogEntry, 'id' | 'time' | 'tenant'>) => void
   clearOpLog: () => void
+  resetBusinessState: () => void
   jobs: JobRecord[]
   addJob: (job: Omit<JobRecord, 'tenant'>) => void
   updateJobStatus: (jobId: string, status: string) => void
@@ -139,6 +140,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [tenant])
 
   const clearOpLog = useCallback(() => setOpLog([]), [])
+
+  // 未登录保护：身份会话消失（登出/会话失效）时清空全部内存态业务记录，
+  // 保证同浏览器下一位使用者看不到上一会话的任何业务数据。
+  const resetBusinessState = useCallback(() => {
+    setOpLog([])
+    setJobs([])
+    setChangeSets([])
+    setExecutions([])
+    setFocusId(null)
+    setPage('products')
+  }, [])
 
   const addJob = useCallback((job: Omit<JobRecord, 'tenant'>) => {
     setJobs((prev) => (prev.some((j) => j.tenant === tenant && j.jobId === job.jobId)
@@ -217,11 +229,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       jobs, addJob, updateJobStatus,
       changeSets, upsertChangeSet, attachAuthorization,
       executions, addExecution, updateExecutionStatus,
+      resetBusinessState,
     }),
     [page, navigate, focusId, clearFocusId, health, tenant,
       tenantOpLog, tenantJobs, tenantChangeSets, tenantExecutions,
       opLog, logOp, clearOpLog, jobs, addJob, updateJobStatus,
-      changeSets, upsertChangeSet, attachAuthorization, executions, addExecution, updateExecutionStatus],
+      changeSets, upsertChangeSet, attachAuthorization, executions, addExecution, updateExecutionStatus,
+      resetBusinessState],
   )
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>
 }

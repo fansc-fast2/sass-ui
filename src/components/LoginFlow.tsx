@@ -7,9 +7,9 @@ import { useSession } from '../session/SessionContext'
 import { ROLE_LABELS } from '../session/permissions'
 import { Badge, Button, Field, TextInput } from './ui'
 
-export function LoginFlow({ onDone }: { onDone?: () => void }) {
+export function LoginFlow({ onDone, startStep }: { onDone?: () => void; startStep?: 'login' | 'select' }) {
   const { login: doLogin, selectTenant, memberships } = useSession()
-  const [step, setStep] = useState<'login' | 'select'>('login')
+  const [step, setStep] = useState<'login' | 'select'>(startStep ?? 'login')
   const [login, setLogin] = useState('frank')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)

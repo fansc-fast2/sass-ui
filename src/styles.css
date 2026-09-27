@@ -326,6 +326,15 @@ body {
 .login-flow { display: flex; flex-direction: column; gap: 10px; }
 
 /* ===== 弹窗（Modal）：登录等浮动对话框，不嵌入信息流 ===== */
+.boot-screen, .gate-screen {
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  background: var(--bg); color: var(--text);
+}
+.gate-brand { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.gate-brand strong { font-size: 18px; }
+.gate-brand .brand-mark { width: 44px; height: 44px; font-size: 17px; }
+.gate-screen .btn { min-width: 160px; }
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 1000;
   background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(2px);

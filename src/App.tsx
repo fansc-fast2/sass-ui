@@ -41,13 +41,18 @@ const PAGE_META = new Map([...PRIMARY_NAV, ...FOOTER_NAV, {
 
 function Shell() {
   const { active, memberships, selectTenant, logout, identityUser, booted } = useSession()
-  const { page, navigate, health, setHealth } = useAppState()
+  const { page, navigate, health, setHealth, resetBusinessState } = useAppState()
   const [showLogin, setShowLogin] = useState(false)
 
-  // 无身份会话（首次访问/退出登录）自动弹出登录框
+  // 未登录保护：无身份会话或未选择租户时，自动弹出登录框
   useEffect(() => {
-    if (booted && !identityUser) setShowLogin(true)
-  }, [booted, identityUser])
+    if (booted && (!identityUser || !active)) setShowLogin(true)
+  }, [booted, identityUser, active])
+
+  // 身份会话消失（登出/失效）→ 清空全部内存态业务记录
+  useEffect(() => {
+    if (booted && !identityUser) resetBusinessState()
+  }, [booted, identityUser, resetBusinessState])
 
   useEffect(() => {
     let alive = true
@@ -67,6 +72,29 @@ function Shell() {
       clearInterval(timer)
     }
   }, [setHealth])
+
+  // ---- 未登录门禁：不渲染任何业务壳/导航/页面，只渲染登录弹窗 ----
+  if (!booted) {
+    return <div className="boot-screen">检测会话中…</div>
+  }
+  if (!identityUser || !active) {
+    return (
+      <div className="gate-screen">
+        <div className="gate-brand">
+          <span className="brand-mark">PK</span>
+          <strong>Platform Console</strong>
+          <p className="muted">租户商品知识与 SEO 优化平台 · 请登录后继续</p>
+        </div>
+        <LoginModal
+          startStep={identityUser && !active ? 'select' : 'login'}
+          onClose={() => setShowLogin(false)}
+        />
+        {(!showLogin) && (
+          <button className="btn btn-primary" onClick={() => setShowLogin(true)}>登录</button>
+        )}
+      </div>
+    )
+  }
 
   const meta = PAGE_META.get(page)
 
