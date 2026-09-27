@@ -14,6 +14,8 @@ export default defineConfig({
       '/v1': { target: BACKEND, changeOrigin: false },
       '/ops/v1': { target: BACKEND, changeOrigin: false },
       '/integrations': { target: BACKEND, changeOrigin: false },
+      '/shopify': { target: BACKEND, changeOrigin: false },
+      '/executor': { target: BACKEND, changeOrigin: false },
     },
   },
   preview: {
@@ -24,6 +26,8 @@ export default defineConfig({
       '/v1': { target: BACKEND, changeOrigin: false },
       '/ops/v1': { target: BACKEND, changeOrigin: false },
       '/integrations': { target: BACKEND, changeOrigin: false },
+      '/shopify': { target: BACKEND, changeOrigin: false },
+      '/executor': { target: BACKEND, changeOrigin: false },
     },
   },
 })

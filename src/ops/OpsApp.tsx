@@ -10,6 +10,7 @@ import {
 } from './opsClient'
 import type { OpsTenant, UsageRow, AuditEntryView } from './opsClient'
 import PluginsPage from './PluginsPage'
+import SupportPage from './SupportPage'
 
 const STATUS_TONES: Record<string, 'ok' | 'warn' | 'err' | 'neutral'> = {
   active: 'ok',
@@ -33,7 +34,7 @@ const NEXT_ACTIONS: Record<string, { to: string; label: string }[]> = {
   closed: [],
 }
 
-type OpsPage = 'tenants' | 'plugins' | 'usage' | 'audit'
+type OpsPage = 'tenants' | 'plugins' | 'support' | 'usage' | 'audit'
 
 export default function OpsApp() {
   const [user, setUser] = useState<{ subject: string; role: string } | null>(null)
@@ -130,6 +131,10 @@ function OpsShell({ user, onLogout }: { user: { subject: string; role: string };
               <span>插件管理</span>
               <em>安装绑定 · 用户 · 付费估算</em>
             </button>
+            <button className={`nav-item ${page === 'support' ? 'active' : ''}`} onClick={() => setPage('support')}>
+              <span>支持授权</span>
+              <em>租户批准 · 15 分钟只读</em>
+            </button>
             <button className={`nav-item ${page === 'usage' ? 'active' : ''}`} onClick={() => setPage('usage')}>
               <span>用量与费用</span>
               <em>聚合 · 成本估算 · 导出</em>
@@ -151,12 +156,14 @@ function OpsShell({ user, onLogout }: { user: { subject: string; role: string };
           <div>
             <h1>
               {page === 'tenants' ? '租户管理' : page === 'plugins' ? '插件管理'
+                : page === 'support' ? '支持授权'
                 : page === 'usage' ? '用量与费用' : '安全审计'}
             </h1>
             <p className="topbar-sub">
               {page === 'usage' ? '聚合为权限受控查询；成本为参考估算（estimated），非账单'
                 : page === 'audit' ? '平台操作审计（采集自第一天）'
                 : page === 'plugins' ? '渠道安装绑定 · 插件用户（绑定租户成员）· 计量与参考成本（非账单）'
+                : page === 'support' ? '支持访问是租户批准的例外：短期只读 + 全程审计，租户可拒绝/撤销'
                 : '平台管理功能不隶属任何租户；支持访问需短期授权与审计'}
             </p>
           </div>
@@ -171,6 +178,7 @@ function OpsShell({ user, onLogout }: { user: { subject: string; role: string };
         <main className="content">
           {page === 'tenants' && <TenantsPage />}
           {page === 'plugins' && <PluginsPage isAdmin={user.role === 'platform_admin'} />}
+          {page === 'support' && <SupportPage />}
           {page === 'usage' && <UsagePage isFinance={user.role === 'platform_admin' || user.role === 'platform_finance'} />}
           {page === 'audit' && <AuditPage />}
         </main>

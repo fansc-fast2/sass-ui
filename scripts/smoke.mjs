@@ -447,6 +447,20 @@ if (seededInstall) {
     `status=${rebinding.status} id_match=${data(rebinding)?.id === seededInstall.id}`)
 }
 
+// ---- 13. Shopify OAuth 安装流 + 支持授权 ----
+// 未配置 SHOPIFY_API_KEY 时 authorize 诚实降级 503（真实安装流属 SH01 门禁）
+const installNoCred = await call('GET', '/shopify/v1/install/authorize?shop=demo-store.myshopify.com', { auth: false })
+check('安装流未配置凭据 → 503（诚实降级）', installNoCred.status === 503, `status=${installNoCred.status}`)
+const installBadShop = await call('GET', '/shopify/v1/install/authorize?shop=evil.example.com', { auth: false })
+check('安装流非法 shop 域名 → 400/503', installBadShop.status === 400 || installBadShop.status === 503,
+  `status=${installBadShop.status}`)
+
+const grantsOps = await call('GET', '/ops/v1/support-grants', { headers: { Authorization: `Bearer ${opsToken}` } })
+check('GET /ops/v1/support-grants（运营全量授权清单）', grantsOps.status === 200 && Array.isArray(data(grantsOps)?.items),
+  `count=${data(grantsOps)?.count}`)
+const grantsByTenant = await call('GET', '/ops/v1/support-grants', { headers: { Authorization: `Bearer ${tenantToken}` } })
+check('tenant 会话请求授权清单 → 401', grantsByTenant.status === 401, `status=${grantsByTenant.status}`)
+
 // ---- 汇总 ----
 console.log(`\n${failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`}`)
 process.exit(failures === 0 ? 0 : 1)

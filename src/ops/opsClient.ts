@@ -212,6 +212,34 @@ export const opsChannelInstallationDetail = (id: string) =>
 export const opsUninstallChannelInstallation = (body: { channel_app_registration_id: string; shop_stable_id: string }) =>
   opsRequest<{ id: string; status: string; installation_epoch: number }>('POST', '/ops/v1/channel-installations/uninstall', body)
 
+// ---- 支持授权（F1：申请 → 租户审批 → 15 分钟会话 → 撤销） ----
+
+export interface SupportGrantView {
+  id: string
+  tenant_id: string
+  requested_by: string
+  approved_by: string
+  purpose: string
+  ticket: string
+  permission: string
+  status: string // requested | approved | active | revoked | rejected | expired
+  session_expires_at: string | null
+  created_at: string
+}
+
+export const opsAllSupportGrants = (query: { tenant_id?: string } = {}) =>
+  opsRequest<{ items: SupportGrantView[]; count: number }>('GET', '/ops/v1/support-grants' + qs(query))
+
+export const opsRequestSupportGrant = (tenantId: string, body: { purpose: string; ticket: string }) =>
+  opsRequest<SupportGrantView>('POST', `/ops/v1/tenants/${encodeURIComponent(tenantId)}/support-grants`, body)
+
+export const opsCreateSupportSession = (grantId: string) =>
+  opsRequest<{ support_session: string; expires_at: string; grant: SupportGrantView }>(
+    'POST', `/ops/v1/support-grants/${encodeURIComponent(grantId)}/sessions`)
+
+export const opsRevokeSupportGrant = (grantId: string) =>
+  opsRequest<{ id: string; status: string }>('POST', `/ops/v1/support-grants/${encodeURIComponent(grantId)}/revoke`)
+
 function qs(query: Record<string, string | undefined>): string {
   const sp = new URLSearchParams()
   for (const [k, v] of Object.entries(query)) if (v) sp.set(k, v)
