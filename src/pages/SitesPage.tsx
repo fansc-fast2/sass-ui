@@ -11,6 +11,8 @@ import { RelativeTime } from '../components/RelativeTime'
 import { StatusBadge } from '../components/StatusBadge'
 import type { StatusSemantic } from '../components/StatusBadge'
 import { IconArrowRight, IconChevronLeft, IconGlobe } from '../components/icons'
+import { useLang } from '../i18n'
+import type { MsgKey, TFunc } from '../i18n'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
 
@@ -21,17 +23,18 @@ const STATUS_TONES: Record<string, 'ok' | 'warn' | 'err' | 'neutral'> = {
   suspended: 'err',
 }
 
-const SITE_STATUS_LABELS: Record<string, string> = {
-  active: '正常',
-  read_only: '只读',
-  disconnected: '已断开',
-  suspended: '已停用',
+const SITE_STATUS_KEYS: Record<string, MsgKey> = {
+  active: 'siteStatusActive',
+  read_only: 'siteStatusReadOnly',
+  disconnected: 'siteStatusDisconnected',
+  suspended: 'siteStatusSuspended',
 }
 
-function siteStatusSemantic(status: string): StatusSemantic {
+function siteStatusSemantic(status: string, t: TFunc): StatusSemantic {
+  const label = SITE_STATUS_KEYS[status] ? t(SITE_STATUS_KEYS[status]) : status
   return {
-    label: SITE_STATUS_LABELS[status] ?? status,
-    detail: `连接状态：${SITE_STATUS_LABELS[status] ?? status}`,
+    label,
+    detail: t('siteStatusDetail', { label }),
     tone: STATUS_TONES[status] ?? 'neutral',
     shape: 'dot',
     icon: <IconGlobe size={11} />,
@@ -39,6 +42,7 @@ function siteStatusSemantic(status: string): StatusSemantic {
 }
 
 export function SitesPage() {
+  const { t } = useLang()
   const { navigate, focusId, clearFocusId } = useAppState()
   const { loading, error, run } = useApiOperation()
   const [sites, setSites] = useState<SiteSummary[]>([])
@@ -70,13 +74,13 @@ export function SitesPage() {
   const columns: Column<SiteSummary>[] = [
     {
       key: 'name',
-      header: '站点',
+      header: t('thSite'),
       render: (s) => (<><span className="cell-strong">{s.name}</span> <MonoText>{s.id}</MonoText></>),
       sortValue: (s) => s.name,
     },
     {
       key: 'host',
-      header: '域名',
+      header: t('thHost'),
       render: (s) => <span className="muted">{s.public_host || '—'}</span>,
       sortValue: (s) => s.public_host ?? '',
       ellipsis: 200,
@@ -84,49 +88,49 @@ export function SitesPage() {
     },
     {
       key: 'markets',
-      header: '市场 / 语言',
+      header: t('thMarkets'),
       render: (s) => <span className="muted">{s.markets.join('/')} · {s.locales.join('/')}</span>,
       sortValue: (s) => s.markets.join('/'),
     },
     {
       key: 'status',
-      header: '连接状态',
-      render: (s) => <StatusBadge semantic={siteStatusSemantic(s.status)} />,
+      header: t('thConnStatus'),
+      render: (s) => <StatusBadge semantic={siteStatusSemantic(s.status, t)} />,
       sortValue: (s) => s.status,
     },
     {
       key: 'last_synced_at',
-      header: '最近同步',
+      header: t('thLastSync'),
       render: (s) => <span className="muted"><RelativeTime value={s.last_synced_at} /></span>,
       sortValue: (s) => s.last_synced_at ?? '',
     },
     {
       key: 'actions',
       header: '',
-      render: (s) => <Button className="btn-xs" onClick={() => navigate('site-detail', s.id)}>详情</Button>,
+      render: (s) => <Button className="btn-xs" onClick={() => navigate('site-detail', s.id)}>{t('detail')}</Button>,
     },
   ]
 
   return (
     <div className="page">
       <ErrorBanner error={error} />
-      <Card title="站点列表" subtitle="GET /v1/sites · 可见站点集合；站点是页面筛选范围，租户是安全边界（19 §2）">
+      <Card title={t('sitesTitle')} subtitle={t('sitesSub')}>
         <div className="row gap">
-          <Button variant="primary" disabled={loading} onClick={() => void query()}>{loading ? '查询中…' : '查询站点'}</Button>
+          <Button variant="primary" disabled={loading} onClick={() => void query()}>{loading ? t('querying') : t('btnQuerySites')}</Button>
         </div>
         <DataTable
           columns={columns}
           rows={sites}
           getRowKey={(s) => s.id}
           onRowClick={(s) => navigate('site-detail', s.id)}
-          empty={loaded ? '还没有可见站点——站点引用由控制层/连接注册同步（骨架阶段为空）' : '点击「查询站点」加载可见站点'}
-          emptyHint={loaded ? '也可以先用站点 ID 直接进入详情页' : undefined}
-          emptyAction={loaded ? <Button variant="primary" onClick={focusDirectOpen}>用站点 ID 直接打开</Button> : undefined}
+          empty={loaded ? t('sitesEmptyLoaded') : t('sitesEmptyInitial')}
+          emptyHint={loaded ? t('sitesEmptyHint') : undefined}
+          emptyAction={loaded ? <Button variant="primary" onClick={focusDirectOpen}>{t('btnOpenBySiteId')}</Button> : undefined}
           footerExtra={null}
         />
       </Card>
 
-      <Card title="直接打开站点" subtitle="站点数据接入前，可用站点 ID 直接进入详情页">
+      <Card title={t('sitesDirectTitle')} subtitle={t('sitesDirectSub')}>
         <div className="row gap">
           <TextInput
             ref={directInputRef}
@@ -135,7 +139,7 @@ export function SitesPage() {
             placeholder="site-us"
             style={{ width: 220 }}
           />
-          <Button variant="primary" disabled={!directId.trim()} onClick={() => navigate('site-detail', directId.trim())}>打开详情</Button>
+          <Button variant="primary" disabled={!directId.trim()} onClick={() => navigate('site-detail', directId.trim())}>{t('btnOpenDetail')}</Button>
         </div>
       </Card>
     </div>
@@ -143,6 +147,7 @@ export function SitesPage() {
 }
 
 export function SiteDetailPage() {
+  const { t } = useLang()
   const { focusId, clearFocusId, navigate } = useAppState()
   const { loading, error, run } = useApiOperation()
   const [id, setId] = useState('')
@@ -170,10 +175,10 @@ export function SiteDetailPage() {
     <div className="page">
       <ErrorBanner error={error} />
       <Card
-        title="站点详情"
-        subtitle="依次查看概览、关联商品、检查覆盖、发布记录与连接能力（19 §4 P04）"
+        title={t('pageSiteDetail')}
+        subtitle={t('siteDetailSub')}
         actions={<Button variant="ghost" onClick={() => navigate('sites')}>
-          <span className="btn-icon-text"><IconChevronLeft size={13} /> 返回站点</span>
+          <span className="btn-icon-text"><IconChevronLeft size={13} /> {t('backToSites')}</span>
         </Button>}
       >
         <div className="row gap">
@@ -182,36 +187,36 @@ export function SiteDetailPage() {
             disabled={loading || !id.trim()}
             onClick={() => navigate('site-detail', id.trim())}
           >
-            {loading ? '加载中…' : '加载'}
+            {loading ? t('loading') : t('btnLoad')}
           </Button>
         </div>
         {site && (
           <>
             <div className="result-col">
-              <ResultRow label="站点"><strong>{site.name}</strong> <MonoText>{site.id}</MonoText></ResultRow>
-              <ResultRow label="域名">{site.public_host || '—'}</ResultRow>
-              <ResultRow label="市场 / 语言">{site.markets.join('/')} · {site.locales.join('/')}</ResultRow>
-              <ResultRow label="连接状态"><StatusBadge semantic={siteStatusSemantic(site.status)} /></ResultRow>
-              <ResultRow label="最近同步">{site.last_synced_at ? <RelativeTime value={site.last_synced_at} /> : '未同步'}</ResultRow>
+              <ResultRow label={t('thSite')}><strong>{site.name}</strong> <MonoText>{site.id}</MonoText></ResultRow>
+              <ResultRow label={t('thHost')}>{site.public_host || '—'}</ResultRow>
+              <ResultRow label={t('thMarkets')}>{site.markets.join('/')} · {site.locales.join('/')}</ResultRow>
+              <ResultRow label={t('thConnStatus')}><StatusBadge semantic={siteStatusSemantic(site.status, t)} /></ResultRow>
+              <ResultRow label={t('thLastSync')}>{site.last_synced_at ? <RelativeTime value={site.last_synced_at} /> : t('notSynced')}</ResultRow>
             </div>
             <div className="row gap wrap">
-              {site.connection_ids.length === 0 && <span className="muted">（骨架阶段无连接引用，可手动查询连接能力）</span>}
+              {site.connection_ids.length === 0 && <span className="muted">{t('noConnRefs')}</span>}
               {site.connection_ids.map((c) => (
-                <Button key={c} onClick={() => void loadCaps(c)}>查询 {c} 能力</Button>
+                <Button key={c} onClick={() => void loadCaps(c)}>{t('btnQueryCaps', { conn: c })}</Button>
               ))}
             </div>
-            {caps && <JsonView value={caps} label="连接能力" />}
+            {caps && <JsonView value={caps} label={t('capsJsonLabel')} />}
             <div className="row gap">
               <Button onClick={() => navigate('products')}>
-                <span className="btn-icon-text">关联商品 <IconArrowRight size={13} /></span>
+                <span className="btn-icon-text">{t('btnLinkedProducts')} <IconArrowRight size={13} /></span>
               </Button>
               <Button onClick={() => navigate('tasks')}>
-                <span className="btn-icon-text">任务与发布记录 <IconArrowRight size={13} /></span>
+                <span className="btn-icon-text">{t('btnJobsAndPublishes')} <IconArrowRight size={13} /></span>
               </Button>
             </div>
           </>
         )}
-        {!site && <p className="muted">输入站点 ID 加载详情。</p>}
+        {!site && <p className="muted">{t('siteNeedIdHint')}</p>}
       </Card>
     </div>
   )

@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react'
 import { authorizeChangeSet, createChangeSet, executeChangeSet, getChangeSet, revokeChangeSet } from '../api/api'
 import { idempotencyScopeFor, stableIdempotencyKey } from '../api/idempotency'
 import type { ChangeEntry, ChangeSetCreated, ChangeSetView, ExecutionAccepted } from '../api/types'
+import { useLang } from '../i18n'
+import type { MsgKey } from '../i18n'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
@@ -18,7 +20,7 @@ import {
 import { IconArrowRight, IconChevronLeft } from '../components/icons'
 
 const FIELD_WHITELIST = ['seo.title', 'seo.description', 'image.alt'] as const
-const STEP_LABELS = ['起草提案', '评审与授权', '执行与结果']
+const STEP_KEYS: MsgKey[] = ['stepDraft', 'stepReview', 'stepExecute']
 
 interface DraftEdit {
   fieldPath: string
@@ -49,28 +51,30 @@ function emptyEntry(productId = 'prod-001'): DraftEntry {
   }
 }
 
-function parseFactRefs(raw: string): { refs: { id: string; version: number }[] } | { err: string } {
+/** fact_refs JSON 校验：返回 key（在调用处经 t() 翻译），避免在组件外取语言。 */
+function parseFactRefs(raw: string): { refs: { id: string; version: number }[] } | { errKey: MsgKey } {
   const trimmed = raw.trim()
   if (!trimmed) return { refs: [] }
   try {
     const parsed: unknown = JSON.parse(trimmed)
-    if (!Array.isArray(parsed)) return { err: 'fact_refs 必须是 JSON 数组' }
+    if (!Array.isArray(parsed)) return { errKey: 'errFactRefsArray' }
     const refs: { id: string; version: number }[] = []
     for (const item of parsed) {
-      if (typeof item !== 'object' || item === null) return { err: 'fact_refs 元素必须是对象' }
+      if (typeof item !== 'object' || item === null) return { errKey: 'errFactRefsObject' }
       const rec = item as Record<string, unknown>
       if (typeof rec.id !== 'string' || typeof rec.version !== 'number' || !Number.isInteger(rec.version)) {
-        return { err: 'fact_refs 元素需要字符串 id 与整数 version' }
+        return { errKey: 'errFactRefsFields' }
       }
       refs.push({ id: rec.id, version: rec.version })
     }
     return { refs }
   } catch {
-    return { err: 'fact_refs 不是合法 JSON' }
+    return { errKey: 'errFactRefsJson' }
   }
 }
 
 export function Proposals() {
+  const { t } = useLang()
   const { hasScope } = useSession()
   const { tenantChangeSets, upsertChangeSet, attachAuthorization, addExecution, navigate, focusId, clearFocusId } = useAppState()
   const { loading, error, run } = useApiOperation()
@@ -82,10 +86,10 @@ export function Proposals() {
   const [viewId, setViewId] = useState('')
   const [view, setView] = useState<ChangeSetView | null>(null)
   const [proposalVersion, setProposalVersion] = useState('1')
-  const [authReason, setAuthReason] = useState('评审通过，授权执行')
+  const [authReason, setAuthReason] = useState(() => t('defaultAuthReason'))
   const [execAuthId, setExecAuthId] = useState('')
   const [execResult, setExecResult] = useState<ExecutionAccepted | null>(null)
-  const [revokeReason, setRevokeReason] = useState('提案作废')
+  const [revokeReason, setRevokeReason] = useState(() => t('defaultRevokeReason'))
   const [flowResult, setFlowResult] = useState<string | null>(null)
 
   // 从商品详情带过来的焦点商品：预填第一条草稿
@@ -117,14 +121,14 @@ export function Proposals() {
     for (const [i, entry] of entries.entries()) {
       if (!entry.productId.trim() || !entry.connectionId.trim() || !entry.siteId.trim()
         || !entry.locale.trim() || !entry.market.trim()) {
-        return { err: `条目 ${i + 1}：product_id / connection_id / site_id / locale / market 均必填` }
+        return { err: t('draftErrMandatory', { n: i + 1 }) }
       }
-      if (entry.edits.length === 0) return { err: `条目 ${i + 1}：至少一条编辑` }
+      if (entry.edits.length === 0) return { err: t('draftErrNoEdits', { n: i + 1 }) }
       const edits = []
       for (const [j, edit] of entry.edits.entries()) {
-        if (!edit.proposedValue) return { err: `条目 ${i + 1} 编辑 ${j + 1}：优化值不能为空` }
+        if (!edit.proposedValue) return { err: t('draftErrEmptyValue', { n: i + 1, m: j + 1 }) }
         const refs = parseFactRefs(edit.factRefsRaw)
-        if ('err' in refs) return { err: `条目 ${i + 1} 编辑 ${j + 1}：${refs.err}` }
+        if ('errKey' in refs) return { err: t('draftErrFactRefs', { n: i + 1, m: j + 1, err: t(refs.errKey) }) }
         edits.push({
           field_path: edit.fieldPath,
           proposed_value: edit.proposedValue,
@@ -164,7 +168,7 @@ export function Proposals() {
       setProposalVersion(String(res.data.proposal_version))
       setFlowResult(null)
       setStep(2)
-      toast.ok(`提案已创建：${res.data.id}（v${res.data.proposal_version}，${res.data.item_count} 处修改），进入评审与授权`)
+      toast.ok(t('proposalCreatedToast', { id: res.data.id, v: res.data.proposal_version, count: res.data.item_count }))
     }
   }
 
@@ -211,8 +215,8 @@ export function Proposals() {
     if (res) {
       attachAuthorization(target, res.data)
       setExecAuthId(res.data.authorization_id)
-      setFlowResult(`授权成功（${res.data.grant_type}，24 小时内有效），可以进入下一步执行。`)
-      toast.ok(`授权成功（${res.data.grant_type}），24 小时内有效；下一步执行发布`)
+      setFlowResult(t('authOkMsg', { grant: res.data.grant_type }))
+      toast.ok(t('authOkToast', { grant: res.data.grant_type }))
     }
   }
 
@@ -224,9 +228,9 @@ export function Proposals() {
         idempotencyScope: idempotencyScopeFor('cs-revoke', target, revokeReason),
       }))
     if (res) {
-      setFlowResult(`提案已撤销（${res.data.status}）。如需重新优化，回到第一步重新起草。`)
+      setFlowResult(t('proposalRevokedMsg', { status: res.data.status }))
       upsertChangeSet({ id: res.data.id, status: res.data.status })
-      toast.info(`提案已撤销（${res.data.status}）`)
+      toast.info(t('proposalRevokedToast', { status: res.data.status }))
     }
   }
 
@@ -242,25 +246,25 @@ export function Proposals() {
       addExecution({ executionId: res.data.execution_id, jobId: res.data.job_id, status: res.data.status })
       setExecResult(res.data)
       setFlowResult(null)
-      toast.ok(`执行已受理：${res.data.execution_id}（任务 ${res.data.job_id}），到任务中心跟踪结果`)
+      toast.ok(t('executionAcceptedToast', { exec: res.data.execution_id, job: res.data.job_id }))
     }
   }
 
   return (
     <div className="page">
       <ErrorBanner error={error} />
-      <Card title="优化提案向导" subtitle="把知识/审计结论落到商品字段：起草，评审授权，执行发布">
-        <Steps current={step} labels={STEP_LABELS} />
-        {flowResult && <p className="flow-result"><Badge tone="info">提示</Badge> {flowResult}</p>}
+      <Card title={t('wizardTitle')} subtitle={t('wizardSub')}>
+        <Steps current={step} labels={STEP_KEYS.map((k) => t(k))} />
+        {flowResult && <p className="flow-result"><Badge tone="info">{t('info')}</Badge> {flowResult}</p>}
 
         {step === 1 && (
           <>
             {entries.map((entry, idx) => (
               <div className="entry-block" key={idx}>
                 <header className="entry-head">
-                  <strong>商品 {idx + 1}</strong>
+                  <strong>{t('entryProductTitle', { n: idx + 1 })}</strong>
                   {entries.length > 1 && (
-                    <Button variant="ghost" onClick={() => setEntries((prev) => prev.filter((_, i) => i !== idx))}>移除</Button>
+                    <Button variant="ghost" onClick={() => setEntries((prev) => prev.filter((_, i) => i !== idx))}>{t('remove')}</Button>
                   )}
                 </header>
                 <div className="grid-3">
@@ -279,34 +283,34 @@ export function Proposals() {
                   <Field label="market">
                     <TextInput value={entry.market} onChange={(e) => patchEntry(idx, { market: e.target.value })} />
                   </Field>
-                  <Field label="variant_id" hint="可选">
+                  <Field label="variant_id" hint={t('optional')}>
                     <TextInput value={entry.variantId} onChange={(e) => patchEntry(idx, { variantId: e.target.value })} />
                   </Field>
                 </div>
                 {entry.edits.map((edit, eidx) => (
                   <div className="edit-block" key={eidx}>
                     <header className="entry-head">
-                      <span className="muted">字段修改 {eidx + 1}</span>
+                      <span className="muted">{t('fieldEditN', { n: eidx + 1 })}</span>
                       {entry.edits.length > 1 && (
                         <Button variant="ghost" onClick={() => setEntries((prev) => prev.map((e, i) => (
                           i === idx ? { ...e, edits: e.edits.filter((_, j) => j !== eidx) } : e
-                        )))}>移除</Button>
+                        )))}>{t('remove')}</Button>
                       )}
                     </header>
                     <div className="grid-3">
-                      <Field label="目标字段" hint="白名单">
+                      <Field label={t('fieldTargetField')} hint={t('hintWhitelist')}>
                         <Select value={edit.fieldPath} onChange={(e) => patchEdit(idx, eidx, { fieldPath: e.target.value })}>
                           {FIELD_WHITELIST.map((f) => <option key={f} value={f}>{f}</option>)}
                         </Select>
                       </Field>
-                      <Field label="asset_id" hint="可选（图片类）">
+                      <Field label="asset_id" hint={t('hintAssetImage')}>
                         <TextInput value={edit.assetId} onChange={(e) => patchEdit(idx, eidx, { assetId: e.target.value })} />
                       </Field>
-                      <Field label="优化值">
+                      <Field label={t('fieldProposedValue')}>
                         <TextInput value={edit.proposedValue} onChange={(e) => patchEdit(idx, eidx, { proposedValue: e.target.value })} />
                       </Field>
                     </div>
-                    <Field label="依据事实 fact_refs" hint='可选，JSON 数组，如 [{"id":"fact-1","version":2}]'>
+                    <Field label={t('fieldFactRefs')} hint={t('hintFactRefs')}>
                       <TextArea rows={2} value={edit.factRefsRaw} onChange={(e) => patchEdit(idx, eidx, { factRefsRaw: e.target.value })} />
                     </Field>
                   </div>
@@ -315,15 +319,15 @@ export function Proposals() {
                   i === idx
                     ? { ...e, edits: [...e.edits, { fieldPath: 'seo.description', proposedValue: '', assetId: '', factRefsRaw: '' }] }
                     : e
-                )))}>+ 再改一个字段</Button>
+                )))}>{t('btnAddFieldEdit')}</Button>
               </div>
             ))}
             <div className="row gap">
-              <Button variant="ghost" onClick={() => setEntries((prev) => [...prev, emptyEntry()])}>+ 添加商品</Button>
+              <Button variant="ghost" onClick={() => setEntries((prev) => [...prev, emptyEntry()])}>{t('btnAddProduct')}</Button>
               <Button variant="primary" disabled={!canPropose || loading} onClick={() => void submitDraft()}>
-                {loading ? '提交中…' : '提交并送审'}
+                {loading ? t('submitting') : t('btnSubmitDraft')}
               </Button>
-              {!canPropose && <p className="muted">当前角色缺少 change.propose 权限（analyst 及以上），只能查看。</p>}
+              {!canPropose && <p className="muted">{t('noPermPropose')}</p>}
             </div>
           </>
         )}
@@ -332,59 +336,59 @@ export function Proposals() {
           <>
             {created && (
               <div className="result-col">
-                <ResultRow label="提案编号"><MonoText>{created.id}</MonoText></ResultRow>
-                <ResultRow label="内容摘要 content_hash"><MonoText>{created.content_hash.slice(0, 32)}…</MonoText></ResultRow>
-                <ResultRow label="版本 / 字段数"><Badge tone="neutral">v{created.proposal_version} · {created.item_count} 处修改</Badge></ResultRow>
+                <ResultRow label={t('labelProposalId')}><MonoText>{created.id}</MonoText></ResultRow>
+                <ResultRow label={t('labelContentHash')}><MonoText>{created.content_hash.slice(0, 32)}…</MonoText></ResultRow>
+                <ResultRow label={t('labelVersionItems')}><Badge tone="neutral">{t('versionItemsBadge', { v: created.proposal_version, count: created.item_count })}</Badge></ResultRow>
               </div>
             )}
             <div className="row gap">
-              <TextInput value={viewId} onChange={(e) => setViewId(e.target.value)} placeholder="也可输入已有提案编号继续处理" style={{ maxWidth: 360 }} />
-              <Button disabled={!canRead || loading || !viewId.trim()} onClick={() => void querySet()}>刷新状态</Button>
+              <TextInput value={viewId} onChange={(e) => setViewId(e.target.value)} placeholder={t('phExistingProposal')} style={{ maxWidth: 360 }} />
+              <Button disabled={!canRead || loading || !viewId.trim()} onClick={() => void querySet()}>{t('btnRefreshStatus')}</Button>
               <Button variant="ghost" onClick={() => setStep(1)}>
-                <span className="btn-icon-text"><IconChevronLeft size={13} /> 回到起草</span>
+                <span className="btn-icon-text"><IconChevronLeft size={13} /> {t('btnBackToDraft')}</span>
               </Button>
             </div>
             {view && (
               <div className="result-col">
-                <ResultRow label="当前状态"><StatusBadge status={view.status} fallbackLabel={view.status} /></ResultRow>
-                <ResultRow label="content_hash（授权时回显）"><MonoText>{view.content_hash}</MonoText></ResultRow>
-                <ResultRow label="哈希 schema">
+                <ResultRow label={t('labelCurrentStatus')}><StatusBadge status={view.status} fallbackLabel={view.status} /></ResultRow>
+                <ResultRow label={t('labelHashEcho')}><MonoText>{view.content_hash}</MonoText></ResultRow>
+                <ResultRow label={t('labelHashSchema')}>
                   {view.hash_schema_version
-                    ? <Badge tone="info">v{view.hash_schema_version}{view.hash_schema_version >= 2 ? ' · 双基线' : ''}</Badge>
-                    : <span className="muted">未声明</span>}
+                    ? <Badge tone="info">v{view.hash_schema_version}{view.hash_schema_version >= 2 ? t('dualBaseline') : ''}</Badge>
+                    : <span className="muted">{t('hashNotDeclared')}</span>}
                 </ResultRow>
-                <ResultRow label="修改明细"><Badge tone="neutral">{view.items.length} 条</Badge></ResultRow>
-                {view.items.length > 0 && <JsonView value={view.items} label="修改明细" />}
+                <ResultRow label={t('labelChangeItems')}><Badge tone="neutral">{t('itemsCount', { count: view.items.length })}</Badge></ResultRow>
+                {view.items.length > 0 && <JsonView value={view.items} label={t('labelChangeItems')} />}
               </div>
             )}
             <div className="grid-2 cards inner">
               <div className="col gap">
-                <strong>评审通过并授权</strong>
-                <Field label="提案版本" hint="与服务端当前版本一致">
+                <strong>{t('authorizeTitle')}</strong>
+                <Field label={t('fieldProposalVersion')} hint={t('hintVersionMatch')}>
                   <TextInput value={proposalVersion} onChange={(e) => setProposalVersion(e.target.value)} />
                 </Field>
-                <Field label="授权理由">
+                <Field label={t('fieldAuthReason')}>
                   <TextArea rows={2} value={authReason} onChange={(e) => setAuthReason(e.target.value)} />
                 </Field>
                 <Button variant="primary" disabled={!canAuthorize || loading || !viewId.trim()} onClick={() => void submitAuthorize()}>
-                  确认授权（回显 content_hash）
+                  {t('btnAuthorize')}
                 </Button>
-                {!canAuthorize && <p className="muted">需要 publisher 角色授权。</p>}
+                {!canAuthorize && <p className="muted">{t('noPermAuthorize')}</p>}
               </div>
               <div className="col gap">
-                <strong>作废提案</strong>
-                <Field label="作废理由">
+                <strong>{t('revokeTitle')}</strong>
+                <Field label={t('fieldRevokeReason')}>
                   <TextInput value={revokeReason} onChange={(e) => setRevokeReason(e.target.value)} />
                 </Field>
                 <Button variant="danger" disabled={!canAuthorize || loading || !viewId.trim()} onClick={() => void submitRevoke()}>
-                  撤销提案
+                  {t('btnRevokeProposal')}
                 </Button>
                 <Button variant="primary" disabled={!execAuthId.trim()} onClick={() => setStep(3)}>
-                  <span className="btn-icon-text">下一步：执行 <IconArrowRight size={13} /></span>
+                  <span className="btn-icon-text">{t('btnNextExecute')} <IconArrowRight size={13} /></span>
                 </Button>
                 {execAuthId
-                  ? <p className="muted">已获得授权 <MonoText>{execAuthId}</MonoText></p>
-                  : <p className="muted">授权成功后才能进入执行。</p>}
+                  ? <p className="muted">{t('hasAuthorization')} <MonoText>{execAuthId}</MonoText></p>
+                  : <p className="muted">{t('needAuthHint')}</p>}
               </div>
             </div>
           </>
@@ -393,18 +397,18 @@ export function Proposals() {
         {step === 3 && (
           <>
             <div className="col gap">
-              <strong>执行发布</strong>
-              <Field label="授权凭证 authorization_id" hint="评审授权后自动带入">
+              <strong>{t('executeTitle')}</strong>
+              <Field label={t('fieldAuthId')} hint={t('hintAuthId')}>
                 <TextInput value={execAuthId} onChange={(e) => setExecAuthId(e.target.value)} />
               </Field>
               <div className="row gap">
                 <Button variant="primary" disabled={!canExecute || loading || !viewId.trim() || !execAuthId.trim()} onClick={() => void submitExecute()}>
-                  {loading ? '提交中…' : '确认执行'}
+                  {loading ? t('submitting') : t('btnConfirmExecute')}
                 </Button>
                 <Button variant="ghost" onClick={() => setStep(2)}>
-                  <span className="btn-icon-text"><IconChevronLeft size={13} /> 回到评审</span>
+                  <span className="btn-icon-text"><IconChevronLeft size={13} /> {t('btnBackToReview')}</span>
                 </Button>
-                {!canExecute && <p className="muted">需要 publisher 角色执行。</p>}
+                {!canExecute && <p className="muted">{t('noPermExecute')}</p>}
               </div>
             </div>
           </>
@@ -412,40 +416,40 @@ export function Proposals() {
       </Card>
 
       {step === 3 && execResult && (
-        <Card title="执行已受理" subtitle="执行是异步的，状态变化在「执行记录」里跟踪">
+        <Card title={t('executionAcceptedTitle')} subtitle={t('executionAcceptedSub')}>
           <div className="result-col">
-            <ResultRow label="提案编号"><MonoText>{viewId}</MonoText></ResultRow>
-            <ResultRow label="执行编号"><MonoText>{execResult.execution_id}</MonoText></ResultRow>
-            <ResultRow label="任务编号"><MonoText>{execResult.job_id}</MonoText></ResultRow>
-            <ResultRow label="当前状态"><StatusBadge status={execResult.status} fallbackLabel={execResult.status} /></ResultRow>
+            <ResultRow label={t('labelProposalId')}><MonoText>{viewId}</MonoText></ResultRow>
+            <ResultRow label={t('labelExecId')}><MonoText>{execResult.execution_id}</MonoText></ResultRow>
+            <ResultRow label={t('labelJobId')}><MonoText>{execResult.job_id}</MonoText></ResultRow>
+            <ResultRow label={t('labelCurrentStatus')}><StatusBadge status={execResult.status} fallbackLabel={execResult.status} /></ResultRow>
             <Button variant="primary" onClick={() => navigate('tasks')}>
-              <span className="btn-icon-text">去执行记录跟踪 <IconArrowRight size={13} /></span>
+              <span className="btn-icon-text">{t('btnTrackExecution')} <IconArrowRight size={13} /></span>
             </Button>
           </div>
         </Card>
       )}
 
-      <Card title="提案列表" subtitle="当前租户在本会话创建或跟进过的提案；从这里可以继续未完成的流程">
+      <Card title={t('proposalListTitle')} subtitle={t('proposalListSub')}>
         {tenantChangeSets.length === 0 ? (
           <div className="empty">
-            <div className="empty-text">暂无提案——在第一步起草并提交后出现在这里</div>
+            <div className="empty-text">{t('proposalListEmpty')}</div>
             <div className="empty-action">
-              <Button variant="primary" onClick={() => setStep(1)}>开始起草提案</Button>
+              <Button variant="primary" onClick={() => setStep(1)}>{t('btnStartDraft')}</Button>
             </div>
           </div>
         ) : (
           <table className="table">
-            <thead><tr><th>编号</th><th>状态</th><th>版本</th><th>授权凭证</th><th>创建时间</th><th></th></tr></thead>
+            <thead><tr><th>{t('thId')}</th><th>{t('status')}</th><th>{t('version')}</th><th>{t('thAuthCredential')}</th><th>{t('thCreatedAt')}</th><th></th></tr></thead>
             <tbody>
               {tenantChangeSets.map((c) => (
                 <tr key={c.id}>
                   <td><MonoText>{c.id}</MonoText></td>
                   <td>{c.status ? <StatusBadge status={c.status} fallbackLabel={c.status} /> : '—'}</td>
                   <td>{c.proposalVersion ? `v${c.proposalVersion}` : '—'}</td>
-                  <td>{c.authorizationId ? <MonoText>{c.authorizationId}</MonoText> : <span className="muted">未授权</span>}</td>
+                  <td>{c.authorizationId ? <MonoText>{c.authorizationId}</MonoText> : <span className="muted">{t('notAuthorized')}</span>}</td>
                   <td className="muted">{c.createdAt}</td>
                   <td>
-                    <Button className="btn-xs" onClick={() => void loadFromList(c.id, c)}>继续处理</Button>
+                    <Button className="btn-xs" onClick={() => void loadFromList(c.id, c)}>{t('btnContinue')}</Button>
                   </td>
                 </tr>
               ))}

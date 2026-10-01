@@ -4,6 +4,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { useLang } from '../i18n'
 import { IconX } from './icons'
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -17,6 +18,7 @@ export function Modal({
   wide?: boolean
 }) {
   const cardRef = useRef<HTMLDivElement | null>(null)
+  const { t } = useLang()
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null
@@ -71,7 +73,7 @@ export function Modal({
       >
         <div className="modal-head">
           <strong>{title}</strong>
-          <button className="modal-close" aria-label="关闭" onClick={onClose}>
+          <button className="modal-close" aria-label={t('close')} onClick={onClose}>
             <IconX size={16} />
           </button>
         </div>

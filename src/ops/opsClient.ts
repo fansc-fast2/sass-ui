@@ -72,7 +72,7 @@ async function opsRequest<T>(method: 'GET' | 'POST', path: string, body?: unknow
       env?.request_id ?? '',
     )
   }
-  if (env?.data === undefined) throw new OpsRequestError(res.status, 'BAD_ENVELOPE', '响应缺少 data', env?.request_id ?? '')
+  if (env?.data === undefined) throw new OpsRequestError(res.status, 'BAD_ENVELOPE', 'ops response missing data', env?.request_id ?? '')
   return env.data
 }
 

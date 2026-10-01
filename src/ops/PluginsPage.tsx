@@ -11,10 +11,13 @@ import {
 import type { ChannelInstallRow, PluginsOverview } from './opsClient'
 import { Modal } from '../components/Modal'
 import { IconArrowRight, IconPlus } from '../components/icons'
+import { useLang } from '../i18n'
+import { langTag } from '../i18n'
 
 const INSTALL_TONES: Record<string, string> = { active: 'badge-ok', uninstalled: 'badge-neutral' }
 
 export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
+  const { t, lang } = useLang()
   const [overview, setOverview] = useState<PluginsOverview | null>(null)
   const [installs, setInstalls] = useState<ChannelInstallRow[] | null>(null)
   const [tenants, setTenants] = useState<{ id: string; name: string }[]>([])
@@ -45,7 +48,7 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
       ])
       setOverview(ov)
       setInstalls(list.items)
-      setTenants(ts.items.map((t) => ({ id: t.id, name: t.name })))
+      setTenants(ts.items.map((x) => ({ id: x.id, name: x.name })))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -67,7 +70,7 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
         canonical_shop_domain: newDomain.trim() || newShop.trim(),
         channel_app_registration_id: newReg.trim(),
       })
-      setCreateMsg(`已绑定 ${ci.shop_stable_id}（租户 ${ci.tenant_id}，epoch ${ci.installation_epoch}）`)
+      setCreateMsg(t('installBoundMsg', { shop: ci.shop_stable_id, tenant: ci.tenant_id, epoch: ci.installation_epoch }))
       setNewShop('')
       setNewDomain('')
       setShowCreate(false)
@@ -78,7 +81,7 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const uninstall = async (row: ChannelInstallRow) => {
-    if (!window.confirm(`卸载 ${row.shop_stable_id}？epoch 将递增，旧授权/在途命令全部失效。`)) return
+    if (!window.confirm(t('confirmUninstall', { shop: row.shop_stable_id }))) return
     setDetailError(null)
     try {
       await opsUninstallChannelInstallation({
@@ -107,22 +110,22 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
       {/* 总览 */}
       <div className="card">
         <div className="card-body">
-          <strong>插件总览</strong>
+          <strong>{t('pluginsOverviewTitle')}</strong>
           {overview ? (
             <div className="row gap wrap" style={{ marginTop: 8 }}>
-              <span className="badge badge-ok">有效安装 {overview.installations.active}</span>
-              <span className="badge badge-neutral">已卸载 {overview.installations.uninstalled}</span>
-              <span className="badge badge-neutral">接入插件租户 {overview.tenants_with_plugin}</span>
-              <span className="badge badge-neutral">内核安装记录 {overview.kernel_installations}</span>
+              <span className="badge badge-ok">{t('activeInstallsBadge', { count: overview.installations.active })}</span>
+              <span className="badge badge-neutral">{t('uninstalledBadge', { count: overview.installations.uninstalled })}</span>
+              <span className="badge badge-neutral">{t('tenantsWithPluginBadge', { count: overview.tenants_with_plugin })}</span>
+              <span className="badge badge-neutral">{t('kernelInstallsBadge', { count: overview.kernel_installations })}</span>
               {overview.registrations.map((m) => (
                 <span key={m.plugin_key} className="badge badge-warn">
                   {m.plugin_key}@{m.plugin_version}（{m.supported_channels.join('/')}）
                 </span>
               ))}
             </div>
-          ) : <p className="muted">加载中…</p>}
+          ) : <p className="muted">{t('loading')}</p>}
           <p className="muted" style={{ marginTop: 8 }}>
-            付费情况为计量聚合 + 参考价估算（estimated），非账单；Shopify Billing 订阅对账未接入。
+            {t('pluginsOverviewNote')}
           </p>
         </div>
       </div>
@@ -131,24 +134,24 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
       <div className="card">
         <div className="card-body">
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <strong>渠道安装</strong>
+            <strong>{t('installsTitle')}</strong>
             <button className="btn btn-primary" disabled={!isAdmin} onClick={() => setShowCreate(true)}>
-              <span className="btn-icon-text"><IconPlus size={13} /> 注册安装</span>
+              <span className="btn-icon-text"><IconPlus size={13} /> {t('btnRegisterInstall')}</span>
             </button>
           </div>
           <div className="row gap wrap">
             <select className="input select" style={{ width: 150 }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">（全部状态）</option>
+              <option value="">{t('optAllStatus')}</option>
               <option value="active">active</option>
               <option value="uninstalled">uninstalled</option>
             </select>
-            <input className="input" style={{ width: 160 }} placeholder="tenant_id（如 t_1）" value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)} />
-            <button className="btn" disabled={busy} onClick={() => void query()}>{busy ? '查询中…' : '查询'}</button>
+            <input className="input" style={{ width: 160 }} placeholder={t('phTenantIdFilter')} value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)} />
+            <button className="btn" disabled={busy} onClick={() => void query()}>{busy ? t('querying') : t('query')}</button>
           </div>
           {createMsg && <p className="muted">{createMsg}</p>}
           {installs && installs.length > 0 && (
             <table className="table">
-              <thead><tr><th>店铺</th><th>租户</th><th>App 注册</th><th>状态</th><th>epoch</th><th>安装时间</th><th></th></tr></thead>
+              <thead><tr><th>{t('thShop')}</th><th>{t('tenant')}</th><th>{t('thAppReg')}</th><th>{t('status')}</th><th>{t('thEpoch')}</th><th>{t('thInstalledAt')}</th><th></th></tr></thead>
               <tbody>
                 {installs.map((ci) => (
                   <tr key={ci.id}>
@@ -157,11 +160,11 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
                     <td>{ci.registration_id}</td>
                     <td><span className={`badge ${INSTALL_TONES[ci.status] ?? 'badge-neutral'}`}>{ci.status}</span></td>
                     <td>{ci.installation_epoch}</td>
-                    <td className="muted">{new Date(ci.installed_at).toLocaleString('zh-CN', { hour12: false })}</td>
+                    <td className="muted">{new Date(ci.installed_at).toLocaleString(langTag(lang), { hour12: false })}</td>
                     <td>
-                      <button className="btn btn-xs" onClick={() => void openDetail(ci.id)}>详情</button>
+                      <button className="btn btn-xs" onClick={() => void openDetail(ci.id)}>{t('detail')}</button>
                       {isAdmin && ci.status === 'active' && (
-                        <button className="btn btn-xs btn-danger" style={{ marginLeft: 6 }} onClick={() => void uninstall(ci)}>卸载</button>
+                        <button className="btn btn-xs btn-danger" style={{ marginLeft: 6 }} onClick={() => void uninstall(ci)}>{t('btnUninstall')}</button>
                       )}
                     </td>
                   </tr>
@@ -169,7 +172,7 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
               </tbody>
             </table>
           )}
-          {installs && installs.length === 0 && <p className="muted">没有匹配的安装绑定</p>}
+          {installs && installs.length === 0 && <p className="muted">{t('noMatchingInstalls')}</p>}
         </div>
       </div>
 
@@ -178,44 +181,44 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
         <div className="card">
           <div className="card-body">
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <strong>安装详情 <code className="mono">{detail.id}</code></strong>
-              <button className="btn btn-ghost" onClick={() => setDetail(null)}>收起</button>
+              <strong>{t('installDetailTitle')} <code className="mono">{detail.id}</code></strong>
+              <button className="btn btn-ghost" onClick={() => setDetail(null)}>{t('btnCollapse')}</button>
             </div>
             {detailError && <div className="banner banner-err">{detailError}</div>}
 
             <div className="result-col">
-              <div className="result-row"><span className="result-label">店铺 / 租户</span>
+              <div className="result-row"><span className="result-label">{t('labelShopTenant')}</span>
                 <span className="result-value"><code className="mono">{detail.shop_stable_id}</code>
                   <span className="inline-arrow" aria-hidden><IconArrowRight size={12} /></span>
                   <code className="mono">{detail.tenant_id}</code>
-                  {detail.tenant && <>（{detail.tenant.name} · <span className={`badge ${STATUS_TONES[detail.tenant.status] ?? 'badge-neutral'}`}>{detail.tenant.status}</span> · {detail.tenant.plan_id || '无套餐'}）</>}
+                  {detail.tenant && <>（{detail.tenant.name} · <span className={`badge ${STATUS_TONES[detail.tenant.status] ?? 'badge-neutral'}`}>{detail.tenant.status}</span> · {detail.tenant.plan_id || t('noPlan')}）</>}
                 </span></div>
-              <div className="result-row"><span className="result-label">授权状态</span>
+              <div className="result-row"><span className="result-label">{t('labelAuthStatus')}</span>
                 <span className="result-value">{detail.auth_status} · epoch {detail.installation_epoch}</span></div>
             </div>
 
-            <strong>插件用户（绑定租户成员）</strong>
-            <p className="muted">平台侧可见的是使用该插件实例的租户成员；插件业务端内用户（如 Dealer/客户）在插件业务库，平台不持有。</p>
+            <strong>{t('pluginUsersTitle')}</strong>
+            <p className="muted">{t('pluginUsersNote')}</p>
             {(detail.members?.length ?? 0) > 0 ? (
               <table className="table">
-                <thead><tr><th>成员</th><th>角色</th><th>状态</th><th>加入时间</th></tr></thead>
+                <thead><tr><th>{t('member')}</th><th>{t('role')}</th><th>{t('status')}</th><th>{t('thJoinedAt')}</th></tr></thead>
                 <tbody>
                   {detail.members!.map((m) => (
                     <tr key={m.membership_id}>
                       <td><code className="mono">{m.subject_id}</code></td>
                       <td>{m.role}</td>
                       <td>{m.status}</td>
-                      <td className="muted">{new Date(m.joined_at).toLocaleString('zh-CN', { hour12: false })}</td>
+                      <td className="muted">{new Date(m.joined_at).toLocaleString(langTag(lang), { hour12: false })}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            ) : <p className="muted">该租户暂无成员</p>}
+            ) : <p className="muted">{t('tenantNoMembers')}</p>}
 
-            <strong>插件运行时（执行器）</strong>
+            <strong>{t('executorsTitle')}</strong>
             {(detail.executors?.length ?? 0) > 0 ? (
               <table className="table">
-                <thead><tr><th>执行器</th><th>站点</th><th>audience</th><th>状态</th><th>协议</th></tr></thead>
+                <thead><tr><th>{t('thExecutor')}</th><th>{t('thSite')}</th><th>{t('thAudience')}</th><th>{t('status')}</th><th>{t('thProtocol')}</th></tr></thead>
                 <tbody>
                   {detail.executors!.map((e) => (
                     <tr key={e.executor_id}>
@@ -228,13 +231,13 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
                   ))}
                 </tbody>
               </table>
-            ) : <p className="muted">该租户暂无执行器注册（子站命令领取不可用）</p>}
+            ) : <p className="muted">{t('noExecutors')}</p>}
 
             {(detail.plugin_installations?.length ?? 0) > 0 && (
               <>
-                <strong>插件内核安装</strong>
+                <strong>{t('kernelInstallsTitle')}</strong>
                 <table className="table">
-                  <thead><tr><th>插件</th><th>版本</th><th>状态</th><th>epoch</th><th>站点</th></tr></thead>
+                  <thead><tr><th>{t('thPlugin')}</th><th>{t('version')}</th><th>{t('status')}</th><th>{t('thEpoch')}</th><th>{t('thSite')}</th></tr></thead>
                   <tbody>
                     {detail.plugin_installations!.map((p) => (
                       <tr key={p.id}>
@@ -250,13 +253,13 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
               </>
             )}
 
-            <strong>付费情况（参考估算）</strong>
+            <strong>{t('paymentTitle')}</strong>
             {(detail.usage?.length ?? 0) === 0 ? (
-              <p className="muted">尚未接入计量（不显示 0）</p>
+              <p className="muted">{t('noMetering')}</p>
             ) : (
               <>
                 <table className="table">
-                  <thead><tr><th>计量</th><th>总量</th><th>confirmed / estimated / unknown</th><th>事件数</th><th>最近</th></tr></thead>
+                  <thead><tr><th>{t('thMetricName')}</th><th>{t('thQty')}</th><th>{t('thQualityCols')}</th><th>{t('thEvents')}</th><th>{t('thLatest')}</th></tr></thead>
                   <tbody>
                     {detail.usage!.map((u) => (
                       <tr key={u.metric}>
@@ -264,17 +267,17 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
                         <td>{u.total} {u.unit}</td>
                         <td className="muted">
                           {u.by_quality.confirmed ?? 0} / {u.by_quality.estimated ?? 0} / {u.by_quality.unknown ?? 0}
-                          {(u.by_quality.unknown ?? 0) > 0 && <span className="badge badge-warn" style={{ marginLeft: 6 }}>未知待核对</span>}
+                          {(u.by_quality.unknown ?? 0) > 0 && <span className="badge badge-warn" style={{ marginLeft: 6 }}>{t('unknownPendingBadge')}</span>}
                         </td>
                         <td>{u.event_count}</td>
-                        <td className="muted">{new Date(u.last_at).toLocaleString('zh-CN', { hour12: false })}</td>
+                        <td className="muted">{new Date(u.last_at).toLocaleString(langTag(lang), { hour12: false })}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {detail.cost_estimate && detail.cost_estimate.lines.length > 0 && (
                   <p>
-                    参考成本合计 <strong>{detail.cost_estimate.estimated_total.toFixed(2)}</strong> {detail.cost_estimate.currency}
+                    {t('costTotalLine', { total: detail.cost_estimate.estimated_total.toFixed(2), currency: detail.cost_estimate.currency })}
                     <span className="badge badge-warn" style={{ marginLeft: 6 }}>estimated</span>
                     <span className="muted">（{detail.cost_estimate.note}）</span>
                   </p>
@@ -287,27 +290,27 @@ export default function PluginsPage({ isAdmin }: { isAdmin: boolean }) {
 
       {/* 注册安装：弹窗承载 */}
       {showCreate && (
-        <Modal title="注册安装绑定" onClose={() => setShowCreate(false)} wide>
+        <Modal title={t('registerInstallTitle')} onClose={() => setShowCreate(false)} wide>
           <div className="col gap">
-            <label className="field"><span className="field-label">租户</span>
+            <label className="field"><span className="field-label">{t('fieldTenantPick')}</span>
               <select className="input select" value={newTenant} onChange={(e) => setNewTenant(e.target.value)}>
-                <option value="">选择租户…</option>
-                {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}（{t.id}）</option>)}
+                <option value="">{t('optChooseTenant')}</option>
+                {tenants.map((x) => <option key={x.id} value={x.id}>{x.name}（{x.id}）</option>)}
               </select></label>
-            <label className="field"><span className="field-label">店铺稳定 ID</span>
+            <label className="field"><span className="field-label">{t('fieldShopId')}</span>
               <input className="input" value={newShop} onChange={(e) => setNewShop(e.target.value)} placeholder="shop-demo.myshopify.com" /></label>
-            <label className="field"><span className="field-label">规范域名（可留空同店铺 ID）</span>
+            <label className="field"><span className="field-label">{t('fieldCanonicalDomain')}</span>
               <input className="input" value={newDomain} onChange={(e) => setNewDomain(e.target.value)} /></label>
-            <label className="field"><span className="field-label">App 注册 ID</span>
+            <label className="field"><span className="field-label">{t('fieldAppRegId')}</span>
               <input className="input" value={newReg} onChange={(e) => setNewReg(e.target.value)} /></label>
             <button
               className="btn btn-primary"
               disabled={!isAdmin || busy || !newTenant || !newShop.trim() || !newReg.trim()}
               onClick={() => void create()}
             >
-              绑定（幂等）
+              {t('btnBind')}
             </button>
-            <p className="muted">幂等：同 App 注册+店铺已绑同一租户时返回原绑定；换租户必须先卸载重装。注册/卸载需要 platform_admin 角色。</p>
+            <p className="muted">{t('bindIdempotentNote')}</p>
           </div>
         </Modal>
       )}

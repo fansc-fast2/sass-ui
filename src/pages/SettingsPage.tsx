@@ -1,5 +1,6 @@
 // 设置（/settings，底部导航）：身份会话、权威成员关系、成员管理（tenant_admin）、
 // 用量与配额、支持授权、接口一览。租户目录/成员治理的权威在平台控制面（ADR-17）。
+// 本页同时承载语言切换（中/英，即时生效，localStorage 记忆）。
 
 import { useEffect, useState } from 'react'
 import {
@@ -12,9 +13,11 @@ import type { TenantMember, TenantUsageBucket, TenantSupportGrant } from '../api
 import { Badge, Button, Card, Field, MonoText, Select, TextInput } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { LoginFlow } from '../components/LoginFlow'
+import { LanguageSelect } from '../components/LanguageSelect'
 import { IconCheck, IconPlus, IconX } from '../components/icons'
 import { toast } from '../components/Toast'
-import { PERM_LABELS, ROLE_LABELS } from '../session/permissions'
+import { useLang } from '../i18n'
+import { permLabel, roleLabel } from '../session/permissions'
 import { useSession } from '../session/SessionContext'
 
 const ROLE_OPTIONS = ['viewer', 'analyst', 'knowledge_reviewer', 'publisher', 'tenant_admin'] as const
@@ -54,21 +57,29 @@ const ROUTES: { method: string; path: string; perm: string }[] = [
 ]
 
 export function SettingsPage() {
+  const { t } = useLang()
   const { hasScope, active, identityUser, logout } = useSession()
   const isAdmin = active?.role === 'tenant_admin'
 
   return (
     <div className="page">
-      <Card title="身份会话" subtitle="IdentityContext 与 TenantContext 分离；会话凭据只存本标签页 sessionStorage">
+      <Card title={t('identityCardTitle')} subtitle={t('identityCardSub')}>
         {identityUser ? (
           <div className="result-col">
-            <div className="result-row"><span className="result-label">身份</span><span className="result-value"><strong>{identityUser.display_name}</strong>（{identityUser.login}）</span></div>
-            <div className="result-row"><span className="result-label">当前租户</span><span className="result-value">{active ? <><strong>{active.tenantName}</strong> · {active.role}</> : '未选择'}</span></div>
-            <div className="result-row"><span className="result-label">退出登录</span><span className="result-value"><button className="btn btn-xs" onClick={logout}>清除本页会话</button></span></div>
+            <div className="result-row"><span className="result-label">{t('labelIdentity')}</span><span className="result-value"><strong>{identityUser.display_name}</strong>（{identityUser.login}）</span></div>
+            <div className="result-row"><span className="result-label">{t('currentTenant')}</span><span className="result-value">{active ? <><strong>{active.tenantName}</strong> · {active.role}</> : t('notSelected')}</span></div>
+            <div className="result-row"><span className="result-label">{t('labelLogout')}</span><span className="result-value"><button className="btn btn-xs" onClick={logout}>{t('btnClearSession')}</button></span></div>
           </div>
         ) : (
           <LoginFlow />
         )}
+      </Card>
+
+      <Card title={t('langCardTitle')} subtitle={t('langCardSub')}>
+        <div className="row gap">
+          <span className="muted">{t('langLabel')}</span>
+          <LanguageSelect />
+        </div>
       </Card>
 
       <TenantInfoCard isAdmin={isAdmin} tenantId={active?.tenantId ?? ''} />
@@ -76,19 +87,19 @@ export function SettingsPage() {
       <UsageCard tenantId={active?.tenantId ?? ''} />
       <SupportGrantsCard isAdmin={isAdmin} tenantId={active?.tenantId ?? ''} />
 
-      <Card title="接口一览" subtitle="后端 devkit v1.8 的 31 个 /v1 操作；「当前角色」列显示该角色是否具备所需权限">
+      <Card title={t('routesCardTitle')} subtitle={t('routesCardSub')}>
         <table className="table">
-          <thead><tr><th>方法</th><th>路径</th><th>所需权限</th><th>当前角色</th></tr></thead>
+          <thead><tr><th>{t('thMethod')}</th><th>{t('thPath')}</th><th>{t('thRequiredPerm')}</th><th>{t('thCurrentRole')}</th></tr></thead>
           <tbody>
             {ROUTES.map((r) => (
               <tr key={`${r.method} ${r.path}`}>
                 <td><Badge tone={r.method === 'GET' ? 'neutral' : 'info'}>{r.method}</Badge></td>
                 <td><MonoText>{r.path}</MonoText></td>
-                <td>{r.perm}{PERM_LABELS[r.perm] ? ` · ${PERM_LABELS[r.perm]}` : ''}</td>
+                <td>{r.perm}{permLabel(t, r.perm) ? ` · ${permLabel(t, r.perm)}` : ''}</td>
                 <td>
                   {hasScope(r.perm)
-                    ? <span className="status-badge status-ok shape-dot" title="当前角色具备所需权限"><span className="status-shape" aria-hidden /><span className="status-icon" aria-hidden><IconCheck size={11} /></span>有权限</span>
-                    : <span className="status-badge status-warn shape-triangle" title="当前角色缺少所需权限，需要更高角色"><span className="status-shape" aria-hidden /><span className="status-icon" aria-hidden><IconX size={11} /></span>需更高角色</span>}
+                    ? <span className="status-badge status-ok shape-dot" title={t('permAllowedTitle')}><span className="status-shape" aria-hidden /><span className="status-icon" aria-hidden><IconCheck size={11} /></span>{t('permAllowed')}</span>
+                    : <span className="status-badge status-warn shape-triangle" title={t('permHigherNeededTitle')}><span className="status-shape" aria-hidden /><span className="status-icon" aria-hidden><IconX size={11} /></span>{t('permHigherNeeded')}</span>}
                 </td>
               </tr>
             ))}
@@ -102,6 +113,7 @@ export function SettingsPage() {
 // ---- 租户信息（v0.2 §9 #15/16：非安全元数据，乐观并发）----
 
 function TenantInfoCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: string }) {
+  const { t } = useLang()
   const [name, setName] = useState('')
   const [rowVersion, setRowVersion] = useState(0)
   const [status, setStatus] = useState('')
@@ -114,8 +126,8 @@ function TenantInfoCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: str
       setName(res.data.name)
       setRowVersion(res.data.row_version)
       setStatus(res.data.status)
-    }).catch(() => setError('无法加载租户信息'))
-  }, [tenantId])
+    }).catch(() => setError(t('loadTenantInfoFailed')))
+  }, [tenantId, t])
 
   const save = async () => {
     setError(null); setMsg(null)
@@ -123,19 +135,19 @@ function TenantInfoCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: str
       const res = await updateTenantSettings({ name: name.trim(), expected_row_version: rowVersion })
       setName(res.data.name)
       setRowVersion(res.data.row_version)
-      setMsg('已保存')
-      toast.ok('租户信息已保存')
+      setMsg(t('saved'))
+      toast.ok(t('tenantSavedToast'))
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
 
   if (!tenantId) return null
   return (
-    <Card title="租户信息" subtitle={isAdmin ? '重命名（乐观并发：与服务端版本一致才生效）' : '只有 tenant_admin 可以修改'}>
+    <Card title={t('tenantInfoTitle')} subtitle={isAdmin ? t('tenantInfoSubAdmin') : t('tenantInfoSubNonAdmin')}>
       {error && <div className="banner banner-err">{error}</div>}
       <div className="row gap wrap">
         <TextInput value={name} onChange={(e) => setName(e.target.value)} style={{ width: 220 }} />
         <Badge tone={status === 'active' ? 'ok' : 'warn'}>{status || '—'}</Badge>
-        <Button variant="primary" disabled={!isAdmin || !name.trim()} onClick={() => void save()}>保存</Button>
+        <Button variant="primary" disabled={!isAdmin || !name.trim()} onClick={() => void save()}>{t('save')}</Button>
       </div>
       {msg && <p className="muted">{msg}</p>}
     </Card>
@@ -145,6 +157,7 @@ function TenantInfoCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: str
 // ---- 成员管理 ----
 
 function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: string }) {
+  const { t } = useLang()
   const { memberships, selectTenant } = useSession()
   const [members, setMembers] = useState<TenantMember[]>([])
   const [invitee, setInvitee] = useState('')
@@ -169,7 +182,7 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
     try {
       const res = await createTenantInvitation({ invitee_login: invitee.trim(), role })
       setInviteToken(res.data.token)
-      setMsg(`邀请已创建（${res.data.id}），明文令牌只显示一次`)
+      setMsg(t('inviteCreatedMsg', { id: res.data.id }))
       setInvitee('')
       setShowInvite(false)
       await load()
@@ -187,11 +200,11 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
   }
 
   return (
-    <Card title="成员管理" subtitle={isAdmin ? '邀请、改角色、停用成员（tenant_admin）' : '只有 tenant_admin 可以管理成员'}>
+    <Card title={t('membersCardTitle')} subtitle={isAdmin ? t('membersSubAdmin') : t('membersSubNonAdmin')}>
       {error && <div className="banner banner-err">{error}</div>}
       {members.length > 0 && (
         <table className="table">
-          <thead><tr><th>成员</th><th>角色</th><th>状态</th>{isAdmin && <th>操作</th>}</tr></thead>
+          <thead><tr><th>{t('member')}</th><th>{t('role')}</th><th>{t('status')}</th>{isAdmin && <th>{t('actions')}</th>}</tr></thead>
           <tbody>
             {members.map((m) => (
               <tr key={m.membership_id} className={m.status === 'active' ? '' : 'row-dimmed'}>
@@ -199,12 +212,12 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
                 <td>
                   {isAdmin
                     ? <Select value={m.role} onChange={(e) => void changeRole(m.membership_id, e.target.value)} style={{ width: 160 }}>
-                        {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}</option>)}
+                        {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{roleLabel(t, r)}</option>)}
                       </Select>
-                    : ROLE_LABELS[m.role as keyof typeof ROLE_LABELS] ?? m.role}
+                    : roleLabel(t, m.role)}
                 </td>
                 <td><Badge tone={m.status === 'active' ? 'ok' : 'warn'}>{m.status}</Badge></td>
-                {isAdmin && <td><Button className="btn-xs" variant="ghost" onClick={() => void disableMember(m.membership_id)}>停用</Button></td>}
+                {isAdmin && <td><Button className="btn-xs" variant="ghost" onClick={() => void disableMember(m.membership_id)}>{t('btnDisableMember')}</Button></td>}
               </tr>
             ))}
           </tbody>
@@ -213,36 +226,36 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
       {isAdmin && (
         <div className="row gap wrap">
           <Button variant="primary" onClick={() => setShowInvite(true)}>
-            <span className="btn-icon-text"><IconPlus size={13} /> 邀请成员</span>
+            <span className="btn-icon-text"><IconPlus size={13} /> {t('btnInviteMember')}</span>
           </Button>
         </div>
       )}
       {showInvite && isAdmin && (
-        <Modal title="邀请成员" onClose={() => setShowInvite(false)}>
+        <Modal title={t('inviteModalTitle')} onClose={() => setShowInvite(false)}>
           <div className="col gap">
-            <Field label="受邀身份登录名">
+            <Field label={t('fieldInvitee')}>
               <TextInput value={invitee} onChange={(e) => setInvitee(e.target.value)} placeholder="olivia" />
             </Field>
-            <Field label="租户内角色">
+            <Field label={t('fieldTenantRole')}>
               <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}</option>)}
+                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{roleLabel(t, r)}</option>)}
               </Select>
             </Field>
-            <Button variant="primary" disabled={!invitee.trim()} onClick={() => void invite()}>创建邀请</Button>
-            <p className="muted">邀请创建后生成一次性明文令牌（只显示一次），受邀人在"我的邀请"中凭令牌接受。</p>
+            <Button variant="primary" disabled={!invitee.trim()} onClick={() => void invite()}>{t('btnCreateInvite')}</Button>
+            <p className="muted">{t('inviteNote')}</p>
           </div>
         </Modal>
       )}
       {inviteToken && (
         <div className="banner banner-warn">
-          <strong>邀请令牌（只显示一次）：</strong>
+          <strong>{t('inviteTokenBanner')}</strong>
           <code className="mono" style={{ wordBreak: 'break-all' }}>{inviteToken}</code>
         </div>
       )}
       {msg && <p className="muted">{msg}</p>}
       {!isAdmin && memberships.length > 1 && (
         <div className="row gap wrap">
-          <span className="muted">切换租户：</span>
+          <span className="muted">{t('switchTenant')}</span>
           {memberships.filter((m) => m.tenant_id !== tenantId).map((m) => (
             <Button key={m.membership_id} className="btn-xs" onClick={() => void selectTenant(m.membership_id)}>
               {m.tenant_name}
@@ -257,6 +270,7 @@ function MemberManagementCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantI
 // ---- 用量与配额 ----
 
 function UsageCard({ tenantId }: { tenantId: string }) {
+  const { t } = useLang()
   const [buckets, setBuckets] = useState<TenantUsageBucket[]>([])
   const [asOf, setAsOf] = useState('')
   const [loaded, setLoaded] = useState(false)
@@ -271,15 +285,15 @@ function UsageCard({ tenantId }: { tenantId: string }) {
   }, [tenantId])
 
   return (
-    <Card title="用量与配额" subtitle="GET /v1/tenant/usage · 空列表 = 尚未接入计量（不显示 0）">
+    <Card title={t('usageCardTitle')} subtitle={t('usageCardSub')}>
       {!loaded ? (
-        <p className="muted">加载中…</p>
+        <p className="muted">{t('loading')}</p>
       ) : buckets.length === 0 ? (
-        <p className="muted">该租户尚未接入计量——配额桶配置后此处展示用量与余量。</p>
+        <p className="muted">{t('usageEmptyHint')}</p>
       ) : (
         <>
           <table className="table">
-            <thead><tr><th>计费项</th><th>范围</th><th>账期</th><th>已用</th><th>预占</th><th>上限</th></tr></thead>
+            <thead><tr><th>{t('thMetric')}</th><th>{t('thScopeType')}</th><th>{t('thPeriod')}</th><th>{t('thUsed')}</th><th>{t('thReserved')}</th><th>{t('thLimit')}</th></tr></thead>
             <tbody>
               {buckets.map((b, i) => (
                 <tr key={i}>
@@ -303,6 +317,7 @@ function UsageCard({ tenantId }: { tenantId: string }) {
 // ---- 支持授权 ----
 
 function SupportGrantsCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: string }) {
+  const { t, lang } = useLang()
   const { identityUser } = useSession()
   const [grants, setGrants] = useState<TenantSupportGrant[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -323,18 +338,18 @@ function SupportGrantsCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: 
     setMsg(null)
     try {
       await decideSupportGrant(id, approve)
-      setMsg(approve ? '已批准支持访问' : '已拒绝支持访问')
+      setMsg(approve ? t('supportApprovedMsg') : t('supportRejectedMsg'))
       await load()
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
   }
 
   return (
-    <Card title="支持授权" subtitle="平台人员发起的受控支持访问；tenant_admin 审批，默认只读、15 分钟有效。申请人≠批准人。">
-      {!loaded ? <p className="muted">加载中…</p>
-      : grants.length === 0 ? <p className="muted">没有支持授权记录</p>
+    <Card title={t('supportCardTitle')} subtitle={t('supportCardSub')}>
+      {!loaded ? <p className="muted">{t('loading')}</p>
+      : grants.length === 0 ? <p className="muted">{t('supportEmpty')}</p>
       : (
         <table className="table">
-          <thead><tr><th>发起人</th><th>用途</th><th>工单</th><th>状态</th><th>会话到期</th>{isAdmin && <th></th>}</tr></thead>
+          <thead><tr><th>{t('thRequester')}</th><th>{t('thPurpose')}</th><th>{t('thTicket')}</th><th>{t('status')}</th><th>{t('thSessionExpires')}</th>{isAdmin && <th></th>}</tr></thead>
           <tbody>
             {grants.map((g) => (
               <tr key={g.id}>
@@ -342,17 +357,17 @@ function SupportGrantsCard({ isAdmin, tenantId }: { isAdmin: boolean; tenantId: 
                 <td>{g.purpose}</td>
                 <td className="muted">{g.ticket || '—'}</td>
                 <td><Badge tone={g.status === 'active' ? 'ok' : g.status === 'requested' ? 'warn' : g.status === 'approved' ? 'info' : 'neutral'}>{g.status}</Badge></td>
-                <td className="muted">{g.session_expires_at ? new Date(g.session_expires_at as string).toLocaleTimeString('zh-CN', { hour12: false }) : '—'}</td>
+                <td className="muted">{g.session_expires_at ? new Date(g.session_expires_at as string).toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en', { hour12: false }) : '—'}</td>
                 {isAdmin && (
                   <td>
                     {g.status === 'requested' && g.can_decide && (
                       <div className="row gap">
-                        <Button className="btn-xs" variant="primary" onClick={() => void decide(g.id, true)}>批准</Button>
-                        <Button className="btn-xs" variant="danger" onClick={() => void decide(g.id, false)}>拒绝</Button>
+                        <Button className="btn-xs" variant="primary" onClick={() => void decide(g.id, true)}>{t('btnApprove')}</Button>
+                        <Button className="btn-xs" variant="danger" onClick={() => void decide(g.id, false)}>{t('btnReject')}</Button>
                       </div>
                     )}
                     {g.requested_by === identityUser?.id && g.status === 'requested' && (
-                      <span className="muted">等待租户管理员审批（不能自批）</span>
+                      <span className="muted">{t('waitingApproval')}</span>
                     )}
                   </td>
                 )}

@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ApiRequestError } from '../api/client'
+import { useLang } from '../i18n'
 import { IconAlert, IconCheck, IconInfo, IconX } from './icons'
 
 export type ToastKind = 'ok' | 'err' | 'info'
@@ -74,6 +75,7 @@ const KIND_ICONS: Record<ToastKind, ReactNode> = {
 
 /** 渲染在 shell 根部的提示栈；右下角、自动消失、可手动关闭、Esc 关闭最新一条。 */
 export function ToastHost() {
+  const { t } = useLang()
   const [list, setList] = useState<ToastItem[]>(items)
 
   useEffect(() => {
@@ -95,11 +97,11 @@ export function ToastHost() {
   if (list.length === 0) return null
   return (
     <div className="toast-stack" role="status" aria-live="polite">
-      {list.map((t) => (
-        <div key={t.id} className={`toast toast-${t.kind}`}>
-          <span className="toast-icon" aria-hidden>{KIND_ICONS[t.kind]}</span>
-          <div className="toast-body">{t.message}</div>
-          <button type="button" className="toast-close" aria-label="关闭提示" onClick={() => dismiss(t.id)}>
+      {list.map((item) => (
+        <div key={item.id} className={`toast toast-${item.kind}`}>
+          <span className="toast-icon" aria-hidden>{KIND_ICONS[item.kind]}</span>
+          <div className="toast-body">{item.message}</div>
+          <button type="button" className="toast-close" aria-label={t('closeToast')} onClick={() => dismiss(item.id)}>
             <IconX size={12} />
           </button>
         </div>

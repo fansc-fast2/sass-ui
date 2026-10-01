@@ -1,16 +1,21 @@
 // 应用壳（TenantShell，v0.2 §3）：Identity 登录 → 选租户（权威 memberships）
 // → TenantContext 会话。主导航六入口 + 底部设置；平台运营面在 /ops（双 shell）。
 // SaaS 化：侧边栏分组 + 图标、当前项左侧高亮条（不只靠颜色）、二级页面包屑。
+// i18n：导航/标题等 UI 文案全部经 t() 双语化（key 见 src/i18n/zh.ts）。
 
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { getHealth } from './api/client'
+import { useLang } from './i18n'
+import type { MsgKey } from './i18n'
+import { langTag } from './i18n'
 import { useSession, SessionProvider } from './session/SessionContext'
-import { ROLE_LABELS } from './session/permissions'
+import { roleLabel } from './session/permissions'
 import { AppStateProvider, useAppState } from './state/AppStateContext'
 import type { PageKey } from './state/AppStateContext'
 import { Badge, Button, Select } from './components/ui'
 import { ToastHost } from './components/Toast'
+import { LanguageSelect } from './components/LanguageSelect'
 import {
   IconChevronRight, IconGlobe, IconLayout, IconListCheck, IconProducts, IconRobot, IconSettings, IconTarget,
 } from './components/icons'
@@ -27,62 +32,64 @@ import { TasksPage } from './pages/TasksPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 // v1.8 信息架构（22 §2 交付切片）：六入口不变，按工作域分组展示。
-interface NavItem { key: PageKey; label: string; desc: string; icon: ReactNode; tag?: string }
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+// label/desc 存字典 key，渲染时经 t() 取当前语言文案。
+interface NavItem { key: PageKey; labelKey: MsgKey; descKey: MsgKey; icon: ReactNode; tagKey?: MsgKey; tag?: string }
+const NAV_GROUPS: { labelKey: MsgKey; items: NavItem[] }[] = [
   {
-    label: '总览',
+    labelKey: 'navGroupOverview',
     items: [
-      { key: 'overview', label: '工作台', desc: '待办 · 进行中 · 近期结果', icon: <IconLayout size={15} />, tag: 'M2b' },
-      { key: 'ai', label: 'AI 工作区', desc: '独立工作区 · 按阶段接入', icon: <IconRobot size={15} />, tag: '接入中' },
+      { key: 'overview', labelKey: 'navOverview', descKey: 'navOverviewDesc', icon: <IconLayout size={15} />, tag: 'M2b' },
+      { key: 'ai', labelKey: 'navAi', descKey: 'navAiDesc', icon: <IconRobot size={15} />, tagKey: 'navTagIntegrating' },
     ],
   },
   {
-    label: '商品与知识',
+    labelKey: 'navGroupProducts',
     items: [
-      { key: 'products', label: '商品目录', desc: '商品 · 知识 · 证据 · 问题', icon: <IconProducts size={15} /> },
+      { key: 'products', labelKey: 'navProducts', descKey: 'navProductsDesc', icon: <IconProducts size={15} /> },
     ],
   },
   {
-    label: '站点与渠道',
+    labelKey: 'navGroupSites',
     items: [
-      { key: 'sites', label: '站点列表', desc: '站点 · 连接状态', icon: <IconGlobe size={15} /> },
+      { key: 'sites', labelKey: 'navSites', descKey: 'navSitesDesc', icon: <IconGlobe size={15} /> },
     ],
   },
   {
-    label: '优化中心',
+    labelKey: 'navGroupOptimization',
     items: [
-      { key: 'optimization', label: '问题与提案', desc: '问题 · 提案 · 效果', icon: <IconTarget size={15} /> },
+      { key: 'optimization', labelKey: 'navOptimization', descKey: 'navOptimizationDesc', icon: <IconTarget size={15} /> },
     ],
   },
   {
-    label: '任务中心',
+    labelKey: 'navGroupTasks',
     items: [
-      { key: 'tasks', label: '任务与执行', desc: '任务 · 分项 · 恢复', icon: <IconListCheck size={15} /> },
+      { key: 'tasks', labelKey: 'navTasks', descKey: 'navTasksDesc', icon: <IconListCheck size={15} /> },
     ],
   },
 ]
 
-const FOOTER_NAV: { key: PageKey; label: string; desc: string; icon: ReactNode }[] = [
-  { key: 'settings', label: '设置', desc: '身份 · 成员 · 接口', icon: <IconSettings size={15} /> },
+const FOOTER_NAV: { key: PageKey; labelKey: MsgKey; descKey: MsgKey; icon: ReactNode }[] = [
+  { key: 'settings', labelKey: 'navSettings', descKey: 'navSettingsDesc', icon: <IconSettings size={15} /> },
 ]
 
 const PAGE_META = new Map([
   ...NAV_GROUPS.flatMap((g) => g.items),
   ...FOOTER_NAV,
-  { key: 'product-detail' as PageKey, label: '商品详情', desc: '概览 · 知识与规格 · 证据 · 问题 · 变更' },
-  { key: 'site-detail' as PageKey, label: '站点详情', desc: '概览 · 商品 · 检查 · 发布 · 连接' },
-  { key: 'task-detail' as PageKey, label: '任务详情', desc: '阶段 · 分项 · 副作用 · 恢复' },
+  { key: 'product-detail' as PageKey, labelKey: 'pageProductDetail' as MsgKey, descKey: 'pageProductDetailDesc' as MsgKey, icon: null as ReactNode | null },
+  { key: 'site-detail' as PageKey, labelKey: 'pageSiteDetail' as MsgKey, descKey: 'pageSiteDetailDesc' as MsgKey, icon: null as ReactNode | null },
+  { key: 'task-detail' as PageKey, labelKey: 'pageTaskDetail' as MsgKey, descKey: 'pageTaskDetailDesc' as MsgKey, icon: null as ReactNode | null },
 ].map((i) => [i.key, i]))
 
 // 二级页面包屑（父级可点击返回）
-const PARENT_CRUMB: Partial<Record<PageKey, { label: string; page: PageKey }>> = {
-  'product-detail': { label: '商品与知识', page: 'products' },
-  evidence: { label: '商品与知识', page: 'products' },
-  'site-detail': { label: '站点与渠道', page: 'sites' },
-  'task-detail': { label: '任务中心', page: 'tasks' },
+const PARENT_CRUMB: Partial<Record<PageKey, { labelKey: MsgKey; page: PageKey }>> = {
+  'product-detail': { labelKey: 'navGroupProducts', page: 'products' },
+  evidence: { labelKey: 'navGroupProducts', page: 'products' },
+  'site-detail': { labelKey: 'navGroupSites', page: 'sites' },
+  'task-detail': { labelKey: 'navGroupTasks', page: 'tasks' },
 }
 
 function Shell() {
+  const { t, lang } = useLang()
   const { active, memberships, selectTenant, logout, identityUser, booted } = useSession()
   const { page, navigate, health, setHealth, resetBusinessState } = useAppState()
   const [showLogin, setShowLogin] = useState(false)
@@ -118,7 +125,7 @@ function Shell() {
 
   // ---- 未登录门禁：不渲染任何业务壳/导航/页面，只渲染登录弹窗 ----
   if (!booted) {
-    return <div className="boot-screen">检测会话中…</div>
+    return <div className="boot-screen">{t('bootScreen')}</div>
   }
   if (!identityUser || !active) {
     return (
@@ -126,14 +133,14 @@ function Shell() {
         <div className="gate-brand">
           <span className="brand-mark">PK</span>
           <strong>Platform Console</strong>
-          <p className="muted">租户商品知识与 SEO 优化平台 · 请登录后继续</p>
+          <p className="muted">{t('gateTagline')}</p>
         </div>
         <LoginModal
           startStep={identityUser && !active ? 'select' : 'login'}
           onClose={() => setShowLogin(false)}
         />
         {(!showLogin) && (
-          <button className="btn btn-primary" onClick={() => setShowLogin(true)}>登录</button>
+          <button className="btn btn-primary" onClick={() => setShowLogin(true)}>{t('login')}</button>
         )}
       </div>
     )
@@ -148,18 +155,19 @@ function Shell() {
     || (current === 'site-detail' && item === 'sites')
     || (current === 'task-detail' && item === 'tasks')
 
-  const renderNavItem = (item: { key: PageKey; label: string; desc: string; icon: ReactNode; tag?: string }) => (
+  const renderNavItem = (item: { key: PageKey; labelKey: MsgKey; descKey: MsgKey; icon: ReactNode; tagKey?: MsgKey; tag?: string }) => (
     <button
       key={item.key}
       className={`nav-item ${isRelated(item.key, page) ? 'active' : ''}`}
       onClick={() => navigate(item.key)}
-      title={item.desc}
+      title={t(item.descKey)}
       aria-current={isRelated(item.key, page) ? 'page' : undefined}
     >
       <span className="nav-item-main">
         <span className="nav-item-icon" aria-hidden>{item.icon}</span>
         <span className="nav-item-text">
-          {item.label}
+          {t(item.labelKey)}
+          {item.tagKey && <em className="nav-tag">{t(item.tagKey)}</em>}
           {item.tag && <em className="nav-tag">{item.tag}</em>}
         </span>
       </span>
@@ -173,12 +181,12 @@ function Shell() {
           <span className="brand-mark">PK</span>
           <div>
             <strong>Platform Console</strong>
-            <div className="brand-sub">租户商品知识与 SEO 优化</div>
+            <div className="brand-sub">{t('brandSub')}</div>
           </div>
         </div>
         {active && (
           <div className="tenant-box">
-            <span className="nav-group-label">当前租户</span>
+            <span className="nav-group-label">{t('currentTenant')}</span>
             <Select value={active.tenantId} onChange={(e) => {
               const m = memberships.find((x) => x.tenant_id === e.target.value)
               if (m) void selectTenant(m.membership_id)
@@ -193,34 +201,34 @@ function Shell() {
             <div className="muted">{active.role}</div>
           </div>
         )}
-        <nav className="nav-groups" aria-label="主导航">
+        <nav className="nav-groups" aria-label={t('mainNavAria')}>
           {NAV_GROUPS.map((group) => (
-            <div className="nav-group" key={group.label}>
-              <div className="nav-group-label">{group.label}</div>
+            <div className="nav-group" key={group.labelKey}>
+              <div className="nav-group-label">{t(group.labelKey)}</div>
               {group.items.map(renderNavItem)}
             </div>
           ))}
         </nav>
-        <nav className="nav-groups footer" aria-label="底部导航">
+        <nav className="nav-groups footer" aria-label={t('footerNavAria')}>
           <div className="nav-group">
             {FOOTER_NAV.map((item) => (
               <button
                 key={item.key}
                 className={`nav-item ${page === item.key ? 'active' : ''}`}
                 onClick={() => navigate(item.key)}
-                title={item.desc}
+                title={t(item.descKey)}
                 aria-current={page === item.key ? 'page' : undefined}
               >
                 <span className="nav-item-main">
                   <span className="nav-item-icon" aria-hidden>{item.icon}</span>
-                  <span className="nav-item-text">{item.label}</span>
+                  <span className="nav-item-text">{t(item.labelKey)}</span>
                 </span>
               </button>
             ))}
           </div>
         </nav>
         <div className="sidebar-foot">
-          platform-backend（Go）<br />devkit v1.8 · 31 个 /v1 操作
+          platform-backend（Go）<br />{t('sidebarFootLine2')}
         </div>
       </aside>
 
@@ -228,31 +236,35 @@ function Shell() {
         <header className="topbar">
           <div className="topbar-title">
             {crumb && (
-              <nav className="breadcrumb" aria-label="所在位置">
-                <button className="crumb-link" onClick={() => navigate(crumb.page)}>{crumb.label}</button>
+              <nav className="breadcrumb" aria-label={t('breadcrumbAria')}>
+                <button className="crumb-link" onClick={() => navigate(crumb.page)}>{t(crumb.labelKey)}</button>
                 <span className="crumb-sep" aria-hidden><IconChevronRight size={11} /></span>
-                <span className="crumb-current" aria-current="page">{meta?.label}</span>
+                <span className="crumb-current" aria-current="page">{meta ? t(meta.labelKey) : ''}</span>
               </nav>
             )}
-            <h1>{meta?.label ?? '商品与知识'}</h1>
-            <p className="topbar-sub">{meta?.desc}</p>
+            <h1>{meta ? t(meta.labelKey) : t('navGroupProducts')}</h1>
+            <p className="topbar-sub">{meta ? t(meta.descKey) : ''}</p>
           </div>
           <div className="topbar-right">
-            <span className="health-pill" title={`最近巡检 ${health ? new Date(health.checkedAt).toLocaleTimeString('zh-CN', { hour12: false }) : '—'}`}>
+            <LanguageSelect compact />
+            <span
+              className="health-pill"
+              title={t('healthTitle', { time: health ? new Date(health.checkedAt).toLocaleTimeString(langTag(lang), { hour12: false }) : '—' })}
+            >
               <span className={`health-dot ${health ? (health.ok ? 'up' : 'down') : ''}`} />
-              {health ? (health.ok ? `服务正常 · ${health.ms}ms` : '服务不可达') : '检测中…'}
+              {health ? (health.ok ? t('healthOk', { ms: health.ms }) : t('healthDown')) : t('healthChecking')}
             </span>
             {active ? (
               <>
-                <Badge tone="info">{ROLE_LABELS[active.role as keyof typeof ROLE_LABELS] ?? active.role}</Badge>
+                <Badge tone="info">{roleLabel(t, active.role)}</Badge>
                 <span className="muted mono">{active.tenantName}</span>
-                <Button variant="ghost" onClick={() => navigate('settings')}>设置</Button>
-                <Button variant="ghost" onClick={logout}>退出</Button>
+                <Button variant="ghost" onClick={() => navigate('settings')}>{t('navSettings')}</Button>
+                <Button variant="ghost" onClick={logout}>{t('logout')}</Button>
               </>
             ) : (
               <>
-                <Badge tone="warn">未选择租户</Badge>
-                <Button variant="primary" onClick={() => setShowLogin((v) => !v)}>登录</Button>
+                <Badge tone="warn">{t('noTenantBadge')}</Badge>
+                <Button variant="primary" onClick={() => setShowLogin((v) => !v)}>{t('login')}</Button>
               </>
             )}
           </div>

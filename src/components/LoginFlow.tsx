@@ -3,13 +3,15 @@
 // 真实 IdP 登录（M0 Q06），选租户/交换流程不变。
 
 import { useState } from 'react'
+import { useLang } from '../i18n'
+import { roleLabel } from '../session/permissions'
 import { useSession } from '../session/SessionContext'
-import { ROLE_LABELS } from '../session/permissions'
 import { Badge, Button, Field, TextInput } from './ui'
 import { IconChevronLeft } from './icons'
 
 export function LoginFlow({ onDone, startStep }: { onDone?: () => void; startStep?: 'login' | 'select' }) {
   const { login: doLogin, selectTenant, memberships } = useSession()
+  const { t } = useLang()
   const [step, setStep] = useState<'login' | 'select'>(startStep ?? 'login')
   const [login, setLogin] = useState('frank')
   const [password, setPassword] = useState('')
@@ -24,11 +26,11 @@ export function LoginFlow({ onDone, startStep }: { onDone?: () => void; startSte
     try {
       const res = await fetch('/v1/auth/oidc/authorize?format=json')
       if (res.status === 404) {
-        setSsoHint('平台未启用 SSO（未配置 PK_OIDC_*）')
+        setSsoHint(t('ssoNotEnabled'))
         return
       }
       const env = await res.json()
-      if (!env?.data?.authorize_url) throw new Error(env?.error?.message ?? 'SSO 配置缺失')
+      if (!env?.data?.authorize_url) throw new Error(env?.error?.message ?? 'SSO config missing')
       window.location.href = env.data.authorize_url
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -70,51 +72,51 @@ export function LoginFlow({ onDone, startStep }: { onDone?: () => void; startSte
           onSubmit={(e) => { e.preventDefault(); void submitLogin() }}
         >
           <p className="muted">
-            身份登录（dev 适配器，种子账号 frank / frank123；生产由真实身份服务承接，M0 Q06）。
+            {t('devAdapterNote')}
           </p>
           <div className="grid-2">
-            <Field label="登录名">
+            <Field label={t('fieldLoginName')}>
               <TextInput value={login} onChange={(e) => setLogin(e.target.value)} />
             </Field>
-            <Field label="密码">
+            <Field label={t('fieldPassword')}>
               <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
           </div>
           {error && <div className="banner banner-err">{error}</div>}
           <Button type="submit" variant="primary" disabled={busy || !login.trim() || !password}>
-            {busy ? '登录中…' : '登录'}
+            {busy ? t('loggingIn') : t('login')}
           </Button>
-          <Button variant="ghost" onClick={() => void startSSO()}>企业 SSO 登录</Button>
+          <Button type="button" variant="ghost" onClick={() => void startSSO()}>{t('btnSsoLogin')}</Button>
           {ssoHint && <p className="muted">{ssoHint}</p>}
         </form>
       )}
       {step === 'select' && (
         <div className="col gap">
           <p className="muted">
-            选择要进入的租户成员关系（权威目录来自平台控制面）。选择后会换取租户绑定会话。
+            {t('selectTenantNote')}
           </p>
           {memberships.length === 0 && (
-            <p className="muted">该身份还没有任何租户成员关系——请联系目标租户的管理员邀请你。</p>
+            <p className="muted">{t('noMemberships')}</p>
           )}
           <div className="badge-wrap">
             {memberships.map((m) => (
               <Button key={m.membership_id} variant="primary" disabled={busy || m.status !== 'active'} onClick={() => void pick(m.membership_id)}>
-                进入 {m.tenant_name}（{ROLE_LABELS[m.role as keyof typeof ROLE_LABELS] ?? m.role}）
+                {t('enterTenant', { tenant: m.tenant_name, role: roleLabel(t, m.role) })}
               </Button>
             ))}
           </div>
           {error && <div className="banner banner-err">{error}</div>}
           <div className="row gap">
             <Button variant="ghost" onClick={() => setStep('login')}>
-              <span className="btn-icon-text"><IconChevronLeft size={13} /> 重新登录</span>
+              <span className="btn-icon-text"><IconChevronLeft size={13} /> {t('relogin')}</span>
             </Button>
-            <Button variant="ghost" onClick={onDone}>稍后选择</Button>
+            <Button variant="ghost" onClick={onDone}>{t('chooseLater')}</Button>
           </div>
         </div>
       )}
       <p className="muted">
-        会话受众隔离：identity 会话不能调用业务接口；租户会话随成员/租户状态撤销立即失效。
-        {step !== 'login' && <> <Badge tone="neutral">已获取成员关系 {memberships.length} 条</Badge></>}
+        {t('sessionAudienceNote')}
+        {step !== 'login' && <> <Badge tone="neutral">{t('membershipsFetched', { count: memberships.length })}</Badge></>}
       </p>
     </div>
   )

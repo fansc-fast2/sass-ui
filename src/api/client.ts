@@ -24,11 +24,21 @@ export class ApiRequestError extends Error {
   }
 }
 
-/** 网络层错误（后端不可达、代理断开等）。 */
+/** 网络层错误（后端不可达、代理断开等）。
+ * reason 是稳定枚举：渲染层（ErrorBanner）据此输出本地化文案；
+ * message 是语言无关的技术详情（日志/toast 兜底）。 */
+export type NetworkErrorReason = 'bad_json' | 'bad_envelope' | 'unreachable' | 'bad_error_envelope'
+
 export class NetworkError extends Error {
-  constructor(message: string) {
+  readonly reason: NetworkErrorReason
+  readonly httpStatus?: number
+  readonly detail?: string
+  constructor(reason: NetworkErrorReason, message: string, opts: { httpStatus?: number; detail?: string } = {}) {
     super(message)
     this.name = 'NetworkError'
+    this.reason = reason
+    this.httpStatus = opts.httpStatus
+    this.detail = opts.detail
   }
 }
 
@@ -87,10 +97,10 @@ async function parseEnvelope<T>(res: Response): Promise<Envelope<T>> {
   try {
     parsed = text === '' ? null : JSON.parse(text)
   } catch {
-    throw new NetworkError(`响应不是合法 JSON（HTTP ${res.status}）`)
+    throw new NetworkError('bad_json', 'response is not valid JSON', { httpStatus: res.status })
   }
   if (parsed === null || typeof parsed !== 'object') {
-    throw new NetworkError(`响应缺少信封（HTTP ${res.status}）`)
+    throw new NetworkError('bad_envelope', 'response envelope missing', { httpStatus: res.status })
   }
   return parsed as Envelope<T>
 }
@@ -120,9 +130,9 @@ export async function apiRequest<T>(
       signal: opts.signal,
     })
   } catch (err) {
-    throw new NetworkError(
-      err instanceof Error ? `无法连接平台 API（${err.message}）` : '无法连接平台 API',
-    )
+    throw new NetworkError('unreachable', 'cannot reach the platform API', {
+      detail: err instanceof Error ? err.message : String(err),
+    })
   }
   const elapsedMs = Math.round(performance.now() - started)
   const degraded = res.headers.get('X-Degraded-Mode') === 'readonly'
@@ -133,7 +143,7 @@ export async function apiRequest<T>(
     if (errPayload && typeof errPayload === 'object' && 'code' in errPayload) {
       throw new ApiRequestError(res.status, errPayload, envelope.request_id)
     }
-    throw new NetworkError(`HTTP ${res.status}：响应缺少错误信封`)
+    throw new NetworkError('bad_error_envelope', 'error envelope missing', { httpStatus: res.status })
   }
   return {
     data: envelope.data,

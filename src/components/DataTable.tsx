@@ -4,6 +4,7 @@
 
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useLang } from '../i18n'
 import { ErrorBanner, EmptyState, Loading } from './ui'
 import { IconChevronDown, IconChevronUp, IconChevronLeft, IconChevronRight, IconSort } from './icons'
 
@@ -57,6 +58,7 @@ function compareValues(a: string | number, b: string | number): number {
 }
 
 export function DataTable<T>({ columns, rows, getRowKey, onRowClick, loading, error, empty, emptyAction, emptyHint, total, pageSize, footerExtra, initialSortKey, initialSortDir = 'asc', noFooter }: DataTableProps<T>) {
+  const { t } = useLang()
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(
     initialSortKey ? { key: initialSortKey, dir: initialSortDir } : null,
   )
@@ -90,7 +92,7 @@ export function DataTable<T>({ columns, rows, getRowKey, onRowClick, loading, er
   }
 
   if (error) return <ErrorBanner error={error} />
-  if (loading) return <Loading text="加载中…" />
+  if (loading) return <Loading />
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -124,7 +126,7 @@ export function DataTable<T>({ columns, rows, getRowKey, onRowClick, loading, er
                         type="button"
                         className={`th-sort ${isSorted ? 'th-sorted' : ''}`}
                         onClick={() => toggleSort(c.key)}
-                        title={`按「${typeof c.header === 'string' ? c.header : c.key}」排序`}
+                        title={t('sortBy', { field: typeof c.header === 'string' ? c.header : c.key })}
                       >
                         {c.header}
                         {isSorted
@@ -167,16 +169,16 @@ export function DataTable<T>({ columns, rows, getRowKey, onRowClick, loading, er
       </div>
       {!noFooter && (
         <div className="table-foot">
-          <span className="muted">第 {rangeStart}–{rangeEnd} 条，共 {totalCount} 条</span>
+          <span className="muted">{t('tableRange', { start: rangeStart, end: rangeEnd, total: totalCount })}</span>
           <div className="table-foot-right">
             {pageSize && pageCount > 1 && (
               <span className="pager">
-                <button type="button" className="btn btn-xs" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} aria-label="上一页">
-                  <IconChevronLeft size={12} /> 上一页
+                <button type="button" className="btn btn-xs" disabled={safePage === 0} onClick={() => setPage(safePage - 1)} aria-label={t('prev')}>
+                  <IconChevronLeft size={12} /> {t('prev')}
                 </button>
-                <span className="muted">第 {safePage + 1} / {pageCount} 页</span>
-                <button type="button" className="btn btn-xs" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)} aria-label="下一页">
-                  下一页 <IconChevronRight size={12} />
+                <span className="muted">{t('pagerStatus', { page: safePage + 1, count: pageCount })}</span>
+                <button type="button" className="btn btn-xs" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)} aria-label={t('next')}>
+                  {t('next')} <IconChevronRight size={12} />
                 </button>
               </span>
             )}

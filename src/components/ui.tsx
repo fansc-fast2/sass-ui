@@ -4,6 +4,7 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { useState } from 'react'
 import { ApiRequestError, NetworkError } from '../api/client'
+import { useLang } from '../i18n'
 import { IconCheck } from './icons'
 
 export function Card({ title, subtitle, actions, children }: {
@@ -79,24 +80,41 @@ export function Banner({ tone, title, children }: { tone: 'ok' | 'warn' | 'err' 
 
 /** 业务错误 → 展示 code/message/request_id；网络错误 → 专门提示。 */
 export function ErrorBanner({ error }: { error: unknown }) {
+  const { t } = useLang()
   if (!error) return null
   if (error instanceof ApiRequestError) {
     return (
       <Banner tone={error.status === 401 ? 'warn' : 'err'} title={`${error.code}（HTTP ${error.status}）`}>
         <div>{error.message}</div>
-        <div className="muted">request_id: {error.requestId}{error.retryable ? ' · 可安全重试' : ''}</div>
-        {error.status === 401 && <div>请检查右上角凭据：格式 test-cred:&lt;租户&gt;:&lt;用户&gt;:&lt;角色&gt;[:&lt;站点&gt;]</div>}
-        {error.status === 403 && <div>当前角色缺少该操作权限，切换更高角色或由有权限的同事操作。</div>}
+        <div className="muted">request_id: {error.requestId}{error.retryable ? ` · ${t('errRetryableHint')}` : ''}</div>
+        {error.status === 401 && <div>{t('err401Hint')}</div>}
+        {error.status === 403 && <div>{t('err403Hint')}</div>}
       </Banner>
     )
   }
   if (error instanceof NetworkError) {
-    return <Banner tone="err" title="网络错误">{error.message}（platform-api 未启动？检查 pm2 里的 platform-api）</Banner>
+    // 网络层错误按 reason 输出本地化文案（NetworkError.message 只做日志兜底）
+    let text: string
+    switch (error.reason) {
+      case 'bad_json':
+        text = t('netBadJson', { status: error.httpStatus ?? 0 })
+        break
+      case 'bad_envelope':
+        text = t('netBadEnvelope', { status: error.httpStatus ?? 0 })
+        break
+      case 'unreachable':
+        text = error.detail ? t('netUnreachableDetail', { detail: error.detail }) : t('netUnreachable')
+        break
+      default:
+        text = t('netMissingErrorEnvelope', { status: error.httpStatus ?? 0 })
+        break
+    }
+    return <Banner tone="err" title={t('networkErrorTitle')}>{text}</Banner>
   }
   if (error instanceof Error) {
-    return <Banner tone="err" title="错误">{error.message}</Banner>
+    return <Banner tone="err" title={t('errTitle')}>{error.message}</Banner>
   }
-  return <Banner tone="err" title="未知错误">{String(error)}</Banner>
+  return <Banner tone="err" title={t('unknownErrTitle')}>{String(error)}</Banner>
 }
 
 /** 空态：说明 + 下一步动作入口（SaaS 化：空态不给裸 0，也不堆感叹号）。 */
@@ -110,11 +128,13 @@ export function EmptyState({ text, hint, action }: { text: ReactNode; hint?: Rea
   )
 }
 
-export function Loading({ text = '加载中…' }: { text?: string }) {
-  return <div className="loading">{text}</div>
+export function Loading({ text }: { text?: string }) {
+  const { t } = useLang()
+  return <div className="loading">{text ?? t('loading')}</div>
 }
 
 export function JsonView({ value, label }: { value: unknown; label?: string }) {
+  const { t } = useLang()
   const [copied, setCopied] = useState(false)
   const text = JSON.stringify(value, null, 2) ?? 'null'
   const copy = async () => {
@@ -130,7 +150,7 @@ export function JsonView({ value, label }: { value: unknown; label?: string }) {
     <div className="jsonview">
       <div className="jsonview-head">
         {label && <span>{label}</span>}
-        <button className="btn btn-ghost btn-xs" onClick={copy}>{copied ? '已复制' : '复制'}</button>
+        <button className="btn btn-ghost btn-xs" onClick={copy}>{copied ? t('copied') : t('copy')}</button>
       </div>
       {/* tabIndex=0：Diff/长 JSON 区可键盘聚焦后用方向键滚动 */}
       <pre tabIndex={0}>{text}</pre>

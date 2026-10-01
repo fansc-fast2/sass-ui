@@ -8,6 +8,8 @@ import { JobStatusBadge } from '../components/StatusBadge'
 import { Badge, Button, Card, ErrorBanner, JsonView, MonoText, ResultRow } from '../components/ui'
 import { DataTable } from '../components/DataTable'
 import type { Column } from '../components/DataTable'
+import { useLang } from '../i18n'
+import type { MsgKey } from '../i18n'
 import { useSession } from '../session/SessionContext'
 import { useAppState } from '../state/AppStateContext'
 import { useApiOperation } from '../state/useApiOperation'
@@ -16,27 +18,28 @@ import { SiteSeo } from './SiteSeo'
 import { AnswerQuality } from './AnswerQuality'
 import { Proposals } from './Proposals'
 
-const TABS = [
-  { key: 'issues', label: '问题', perm: 'knowledge.read' },
-  { key: 'siteseo', label: '站内 SEO', perm: 'knowledge.read' },
-  { key: 'answers', label: '答案质量', perm: 'knowledge.read' },
-  { key: 'proposals', label: '提案', perm: 'change.read' },
-  { key: 'results', label: '效果', perm: 'job.read' },
-] as const
-type TabKey = (typeof TABS)[number]['key']
+const TABS: { key: TabKey; labelKey: MsgKey; perm: string }[] = [
+  { key: 'issues', labelKey: 'optTabIssues', perm: 'knowledge.read' },
+  { key: 'siteseo', labelKey: 'optTabSiteseo', perm: 'knowledge.read' },
+  { key: 'answers', labelKey: 'optTabAnswers', perm: 'knowledge.read' },
+  { key: 'proposals', labelKey: 'optTabProposals', perm: 'change.read' },
+  { key: 'results', labelKey: 'optTabResults', perm: 'job.read' },
+]
+type TabKey = 'issues' | 'siteseo' | 'answers' | 'proposals' | 'results'
 
 export function OptimizationPage() {
+  const { t } = useLang()
   const { hasScope } = useSession()
   const { focusId } = useAppState()
-  const visibleTabs = TABS.filter((t) => hasScope(t.perm))
+  const visibleTabs = TABS.filter((tab) => hasScope(tab.perm))
   // 从商品详情「发起优化提案」跳转过来时（带 focusId），直接打开提案标签
   const [tab, setTab] = useState<TabKey>(focusId ? 'proposals' : (visibleTabs[0]?.key ?? 'issues'))
 
   return (
     <div className="page">
       <div className="tabs">
-        {visibleTabs.map((t) => (
-          <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
+        {visibleTabs.map((tabDef) => (
+          <button key={tabDef.key} className={`tab ${tab === tabDef.key ? 'active' : ''}`} onClick={() => setTab(tabDef.key)}>{t(tabDef.labelKey)}</button>
         ))}
       </div>
       {tab === 'issues' && <SeoIssues />}
@@ -50,6 +53,7 @@ export function OptimizationPage() {
 
 // 效果记录：首期由 type=execute 的任务和执行检查派生，不做流量/AI 曝光指标（20 §2）。
 function ResultsTab() {
+  const { t } = useLang()
   const { loading, error, run } = useApiOperation()
   const [jobs, setJobs] = useState<JobItem[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -71,7 +75,7 @@ function ResultsTab() {
   const columns: Column<JobItem>[] = [
     {
       key: 'id',
-      header: '任务',
+      header: t('thJob'),
       render: (j) => <MonoText>{j.id}</MonoText>,
       sortValue: (j) => j.id,
       ellipsis: 220,
@@ -79,7 +83,7 @@ function ResultsTab() {
     },
     {
       key: 'scope',
-      header: '对象范围',
+      header: t('thScope'),
       render: (j) => <span className="muted">{j.side_effect_summary || '—'}</span>,
       sortValue: (j) => j.side_effect_summary,
       ellipsis: 220,
@@ -87,26 +91,26 @@ function ResultsTab() {
     },
     {
       key: 'progress',
-      header: '完成项',
+      header: t('thCompleted'),
       render: (j) => `${j.completed_items}/${j.total_items}`,
       sortValue: (j) => (j.total_items > 0 ? j.completed_items / j.total_items : 0),
     },
     {
       key: 'status',
-      header: '状态',
+      header: t('status'),
       render: (j) => <JobStatusBadge status={j.status} requiresAttention={j.requires_attention} />,
       sortValue: (j) => j.status,
     },
     {
       key: 'cancel',
-      header: '取消',
-      render: (j) => (j.cancel_requested ? <Badge tone="warn">取消已请求</Badge> : '—'),
+      header: t('thCancel'),
+      render: (j) => (j.cancel_requested ? <Badge tone="warn">{t('cancelRequested')}</Badge> : '—'),
       sortValue: (j) => (j.cancel_requested ? 1 : 0),
     },
     {
       key: 'actions',
       header: '',
-      render: (j) => (j.execution_id ? <Button className="btn-xs" onClick={() => void openExec(j.execution_id!)}>检查结果</Button> : null),
+      render: (j) => (j.execution_id ? <Button className="btn-xs" onClick={() => void openExec(j.execution_id!)}>{t('btnCheckResult')}</Button> : null),
     },
   ]
 
@@ -114,25 +118,25 @@ function ResultsTab() {
     <>
       <ErrorBanner error={error} />
       <Card
-        title="效果记录"
-        subtitle="实际页面检查结果由 type=execute 的任务与执行检查派生；首期不含流量或 AI 曝光指标"
+        title={t('resultsTitle')}
+        subtitle={t('resultsSub')}
       >
         <div className="row gap">
-          <Button variant="primary" disabled={loading} onClick={() => void query()}>{loading ? '查询中…' : '查询执行记录'}</Button>
+          <Button variant="primary" disabled={loading} onClick={() => void query()}>{loading ? t('querying') : t('btnQueryExec')}</Button>
         </div>
         <DataTable
           columns={columns}
           rows={jobs}
           getRowKey={(j) => j.id}
           initialSortKey="id"
-          empty={loaded ? '还没有执行记录——提案授权执行后出现在这里' : '点击「查询执行记录」加载'}
-          emptyAction={loaded ? <Button variant="primary" onClick={() => void query()}>重新查询</Button> : undefined}
+          empty={loaded ? t('resultsEmptyLoaded') : t('resultsEmptyInitial')}
+          emptyAction={loaded ? <Button variant="primary" onClick={() => void query()}>{t('btnRequery')}</Button> : undefined}
         />
         {exec && (
           <>
-            <ResultRow label="执行编号"><MonoText>{exec.id}</MonoText></ResultRow>
-            <ResultRow label="执行项"><Badge tone="neutral">{exec.items.length} 条</Badge></ResultRow>
-            {exec.items.length > 0 && <JsonView value={exec.items} label="三层检查结果（data/publish/page）" />}
+            <ResultRow label={t('labelExecId')}><MonoText>{exec.id}</MonoText></ResultRow>
+            <ResultRow label={t('labelExecItems')}><Badge tone="neutral">{t('itemsCount', { count: exec.items.length })}</Badge></ResultRow>
+            {exec.items.length > 0 && <JsonView value={exec.items} label={t('checksJsonLabel')} />}
           </>
         )}
       </Card>

@@ -3,6 +3,7 @@
 // 空态支持给下一步动作入口（emptyAction）。
 
 import type { ReactNode } from 'react'
+import { useLang } from '../i18n'
 import { ErrorBanner, EmptyState, Loading } from './ui'
 
 export function ListState({ loading, error, count, empty, emptyHint, emptyAction, children }: {
@@ -14,8 +15,9 @@ export function ListState({ loading, error, count, empty, emptyHint, emptyAction
   emptyAction?: ReactNode
   children: ReactNode
 }) {
+  const { t } = useLang()
   if (error) return <ErrorBanner error={error} />
-  if (loading) return <Loading text="加载中…" />
+  if (loading) return <Loading text={t('loading')} />
   if (count === 0) return <EmptyState text={empty} hint={emptyHint} action={emptyAction} />
   return <>{children}</>
 }

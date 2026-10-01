@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { listSeoFindings, runSeoScan, setSeoFindingStatus } from '../api/api'
 import type { SeoFinding, SeoScanResult } from '../api/types'
+import { useLang } from '../i18n'
 import { useSession } from '../session/SessionContext'
 import { useApiOperation } from '../state/useApiOperation'
 import {
@@ -25,6 +26,7 @@ const STATUS_TONE: Record<string, 'ok' | 'warn' | 'err' | 'neutral'> = {
 }
 
 export function SiteSeo() {
+  const { t } = useLang()
   const { hasScope } = useSession()
   const { loading, error, run } = useApiOperation()
 
@@ -72,41 +74,41 @@ export function SiteSeo() {
     <>
       <ErrorBanner error={error} />
       <Card
-        title="站内扫描"
-        subtitle="SG01：按 URL 清单做受控抓取并跑 12 条 SEO 规则；抓取失败/被阻断的页记为未观测，不计为不合格"
+        title={t('scanCardTitle')}
+        subtitle={t('scanCardSub')}
       >
         <div className="col gap">
           <div className="row gap wrap">
-            <Field label="站点 ID">
+            <Field label={t('fieldSiteId')}>
               <TextInput value={siteId} onChange={(e) => setSiteId(e.target.value)} placeholder="site-1" style={{ width: 200 }} />
             </Field>
-            <Field label="商品 ID（可选，逗号分隔与 URL 对齐）">
+            <Field label={t('fieldProductIds')}>
               <TextInput value={productIdsText} onChange={(e) => setProductIdsText(e.target.value)} placeholder="p1, p2" style={{ width: 260 }} />
             </Field>
           </div>
-          <Field label="页面 URL（每行一个；必须能通过平台出站白名单）" hint="开发环境可用 PK_SEO_DEV_EGRESS=1 放行本地子站 http 地址">
+          <Field label={t('fieldPageUrls')} hint={t('hintEgress')}>
             <TextArea rows={3} value={urlsText} onChange={(e) => setUrlsText(e.target.value)} placeholder={'http://127.0.0.1:1339/de/products/a1\nhttp://127.0.0.1:1339/de/products/b2'} />
           </Field>
           <div className="row gap">
             <Button variant="primary" disabled={!canRead || loading || urls.length === 0} onClick={() => void doScan()}>
-              {loading ? '扫描中…' : `扫描 ${urls.length || 0} 个页面`}
+              {loading ? t('scanning') : t('btnScan', { count: urls.length || 0 })}
             </Button>
-            <Button disabled={!canRead || loading} onClick={() => void loadFindings()}>刷新 findings 清单</Button>
+            <Button disabled={!canRead || loading} onClick={() => void loadFindings()}>{t('btnRefreshFindings')}</Button>
           </div>
-          {!canRead && <p className="muted">当前角色缺少 knowledge.read 权限。</p>}
+          {!canRead && <p className="muted">{t('noPermRead')}</p>}
         </div>
         {scan && (
           <>
-            <ResultRow label="覆盖率">
+            <ResultRow label={t('labelCoverage')}>
               <Badge tone={scan.coverage === 'complete' ? 'ok' : 'warn'}>
-                {scan.coverage === 'complete' ? 'complete（全部页面已观测）' : 'partial（存在未观测页）'}
+                {scan.coverage === 'complete' ? t('covComplete') : t('covPartial')}
               </Badge>
             </ResultRow>
-            <ResultRow label="结果统计">
-              <Badge tone="neutral">{scan.total_findings} 条发现 · {scan.total_pages} 页 · 跳过 {scan.skipped_count} 页</Badge>
+            <ResultRow label={t('labelScanStats')}>
+              <Badge tone="neutral">{t('scanStatsBadge', { findings: scan.total_findings, pages: scan.total_pages, skipped: scan.skipped_count })}</Badge>
             </ResultRow>
             <table className="table">
-              <thead><tr><th>页面</th><th>抓取</th><th>HTTP</th><th>解析观测</th><th>发现</th><th>错误</th></tr></thead>
+              <thead><tr><th>{t('thPage')}</th><th>{t('thFetch')}</th><th>HTTP</th><th>{t('thObservedParse')}</th><th>{t('thFindings')}</th><th>{t('thError')}</th></tr></thead>
               <tbody>
                 {scan.pages.map((p) => (
                   <tr key={p.url}>
@@ -124,16 +126,16 @@ export function SiteSeo() {
         )}
       </Card>
 
-      <Card title="Findings 清单" subtitle="同一对象的重复发现按指纹合并刷新 last_seen；豁免需 tenant_admin">
+      <Card title={t('findingsCardTitle')} subtitle={t('findingsCardSub')}>
         <div className="row gap wrap">
-          <TextInput value={ruleFilter} onChange={(e) => setRuleFilter(e.target.value)} placeholder="按 rule_id 筛选（如 SEO-META-02）" style={{ width: 280 }} />
-          <Button disabled={!canRead || loading} onClick={() => void loadFindings()}>应用筛选</Button>
+          <TextInput value={ruleFilter} onChange={(e) => setRuleFilter(e.target.value)} placeholder={t('phRuleFilter')} style={{ width: 280 }} />
+          <Button disabled={!canRead || loading} onClick={() => void loadFindings()}>{t('btnApplyFilter')}</Button>
         </div>
         {findings.length === 0
-          ? <EmptyState text="还没有发现——先跑一次扫描（清单为空也可能是全部规则通过）" />
+          ? <EmptyState text={t('findingsEmpty')} />
           : (
             <table className="table">
-              <thead><tr><th>规则</th><th>严重度</th><th>状态</th><th>对象</th><th>观察</th><th></th></tr></thead>
+              <thead><tr><th>{t('thRule')}</th><th>{t('thSeverity')}</th><th>{t('status')}</th><th>{t('thSubject')}</th><th>{t('thObserve')}</th><th></th></tr></thead>
               <tbody>
                 {findings.map((f) => (
                   <tr key={f.fingerprint}>
@@ -144,7 +146,7 @@ export function SiteSeo() {
                     <td className="muted" style={{ maxWidth: 320, overflowWrap: 'anywhere' }}>{f.observed}</td>
                     <td>
                       {f.status === 'open' && (
-                        <Button className="btn-xs" disabled={!canAdmin || loading} onClick={() => void dismiss(f.fingerprint)}>豁免</Button>
+                        <Button className="btn-xs" disabled={!canAdmin || loading} onClick={() => void dismiss(f.fingerprint)}>{t('btnDismissFinding')}</Button>
                       )}
                     </td>
                   </tr>
@@ -152,7 +154,7 @@ export function SiteSeo() {
               </tbody>
             </table>
           )}
-        {!canAdmin && <p className="muted">豁免（dismissed）需要 tenant_admin 角色。</p>}
+        {!canAdmin && <p className="muted">{t('noPermDismiss')}</p>}
       </Card>
     </>
   )

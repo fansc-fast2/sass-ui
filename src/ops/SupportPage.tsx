@@ -10,6 +10,9 @@ import {
 import type { SupportGrantView } from './opsClient'
 import { Modal } from '../components/Modal'
 import { IconPlus } from '../components/icons'
+import { useLang } from '../i18n'
+import { langTag } from '../i18n'
+import type { MsgKey } from '../i18n'
 
 const GRANT_TONES: Record<string, string> = {
   requested: 'badge-warn',
@@ -20,16 +23,17 @@ const GRANT_TONES: Record<string, string> = {
   expired: 'badge-neutral',
 }
 
-const GRANT_LABELS: Record<string, string> = {
-  requested: '待租户审批',
-  approved: '租户已批准（可建会话）',
-  active: '会话进行中',
-  revoked: '已撤销',
-  rejected: '租户已拒绝',
-  expired: '会话已过期',
+const GRANT_KEYS: Record<string, MsgKey> = {
+  requested: 'grantRequested',
+  approved: 'grantApproved',
+  active: 'grantActive',
+  revoked: 'grantRevoked',
+  rejected: 'grantRejected',
+  expired: 'grantExpired',
 }
 
 export default function SupportPage() {
+  const { t, lang } = useLang()
   const [tenants, setTenants] = useState<{ id: string; name: string }[]>([])
   const [grants, setGrants] = useState<SupportGrantView[] | null>(null)
   const [tenantFilter, setTenantFilter] = useState('')
@@ -53,7 +57,7 @@ export default function SupportPage() {
         opsListTenants(),
       ])
       setGrants(list.items)
-      setTenants(ts.items.map((t) => ({ id: t.id, name: t.name })))
+      setTenants(ts.items.map((x) => ({ id: x.id, name: x.name })))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -73,7 +77,7 @@ export default function SupportPage() {
       const g = await opsRequestSupportGrant(reqTenant.trim(), {
         purpose: reqPurpose.trim(), ticket: reqTicket.trim(),
       })
-      setReqMsg(`已发起授权申请 ${g.id}（${g.status}）——等待租户管理员在租户侧审批`)
+      setReqMsg(t('requestSubmittedMsg', { id: g.id, status: g.status }))
       setReqPurpose('')
       setShowReq(false)
       await query()
@@ -94,7 +98,7 @@ export default function SupportPage() {
   }
 
   const revoke = async (g: SupportGrantView) => {
-    if (!window.confirm(`撤销授权 ${g.id}？进行中的支持会话立即失效。`)) return
+    if (!window.confirm(t('confirmRevokeGrant', { id: g.id }))) return
     setError(null)
     try {
       await opsRevokeSupportGrant(g.id)
@@ -113,13 +117,13 @@ export default function SupportPage() {
         <div className="card-body">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <div>
-              <strong>发起支持授权</strong>
+              <strong>{t('supportRequestTitle')}</strong>
               <p className="muted" style={{ margin: '4px 0 0' }}>
-                支持访问是"租户批准的例外"：租户侧审批后才可建立 15 分钟只读会话，全程审计。
+                {t('supportRequestNote')}
               </p>
             </div>
             <button className="btn btn-primary" onClick={() => setShowReq(true)}>
-              <span className="btn-icon-text"><IconPlus size={13} /> 发起申请</span>
+              <span className="btn-icon-text"><IconPlus size={13} /> {t('btnNewRequest')}</span>
             </button>
           </div>
           {reqMsg && <p className="muted">{reqMsg}</p>}
@@ -127,27 +131,26 @@ export default function SupportPage() {
       </div>
 
       {showReq && (
-        <Modal title="发起支持授权" onClose={() => setShowReq(false)}>
+        <Modal title={t('supportRequestTitle')} onClose={() => setShowReq(false)}>
           <div className="col gap">
-            <label className="field"><span className="field-label">租户</span>
+            <label className="field"><span className="field-label">{t('fieldTenantPick')}</span>
               <select className="input select" value={reqTenant} onChange={(e) => setReqTenant(e.target.value)}>
-                <option value="">选择租户…</option>
-                {tenants.map((t) => <option key={t.id} value={t.id}>{t.name}（{t.id}）</option>)}
+                <option value="">{t('optChooseTenant')}</option>
+                {tenants.map((x) => <option key={x.id} value={x.id}>{x.name}（{x.id}）</option>)}
               </select></label>
-            <label className="field"><span className="field-label">访问目的（必填）</span>
-              <input className="input" value={reqPurpose} onChange={(e) => setReqPurpose(e.target.value)} placeholder="排查订单同步异常" /></label>
-            <label className="field"><span className="field-label">关联工单号（必填）</span>
+            <label className="field"><span className="field-label">{t('fieldPurpose')}</span>
+              <input className="input" value={reqPurpose} onChange={(e) => setReqPurpose(e.target.value)} placeholder={t('phPurpose')} /></label>
+            <label className="field"><span className="field-label">{t('fieldTicket')}</span>
               <input className="input" value={reqTicket} onChange={(e) => setReqTicket(e.target.value)} placeholder="TICKET-1024" /></label>
             <button
               className="btn btn-primary"
               disabled={busy || !reqTenant || !reqPurpose.trim() || !reqTicket.trim()}
               onClick={() => void request()}
             >
-              提交申请
+              {t('btnSubmitRequest')}
             </button>
             <p className="muted">
-              申请后由租户管理员在租户侧审批，批准后才能建立 15 分钟只读会话；
-              全程记入双方审计，租户可随时拒绝或撤销。
+              {t('supportRequestNote2')}
             </p>
           </div>
         </Modal>
@@ -156,14 +159,14 @@ export default function SupportPage() {
       {session && (
         <div className="card">
           <div className="card-body">
-            <strong>支持会话已建立 <span className="badge badge-warn">15 分钟有效</span></strong>
+            <strong>{t('sessionCreatedTitle')} <span className="badge badge-warn">{t('sessionValidBadge')}</span></strong>
             <div className="result-col">
-              <div className="result-row"><span className="result-label">会话令牌</span>
+              <div className="result-row"><span className="result-label">{t('labelSessionToken')}</span>
                 <span className="result-value"><code className="mono" style={{ wordBreak: 'break-all' }}>{session.token}</code></span></div>
-              <div className="result-row"><span className="result-label">到期时间</span>
-                <span className="result-value muted">{new Date(session.expiresAt).toLocaleString('zh-CN', { hour12: false })}</span></div>
-              <div className="result-row"><span className="result-label">用途</span>
-                <span className="result-value">短期只读（read_only）租户上下文；操作全部记入审计</span></div>
+              <div className="result-row"><span className="result-label">{t('labelExpiresAt')}</span>
+                <span className="result-value muted">{new Date(session.expiresAt).toLocaleString(langTag(lang), { hour12: false })}</span></div>
+              <div className="result-row"><span className="result-label">{t('thPurpose')}</span>
+                <span className="result-value">{t('sessionPurposeNote')}</span></div>
             </div>
           </div>
         </div>
@@ -172,35 +175,35 @@ export default function SupportPage() {
       <div className="card">
         <div className="card-body">
           <div className="row gap wrap">
-            <input className="input" style={{ width: 160 }} placeholder="tenant_id 筛选" value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)} />
-            <button className="btn btn-primary" disabled={busy} onClick={() => void query()}>{busy ? '查询中…' : '刷新'}</button>
+            <input className="input" style={{ width: 160 }} placeholder={t('phTenantFilter')} value={tenantFilter} onChange={(e) => setTenantFilter(e.target.value)} />
+            <button className="btn btn-primary" disabled={busy} onClick={() => void query()}>{busy ? t('querying') : t('refresh')}</button>
           </div>
           {grants && grants.length > 0 && (
             <table className="table">
-              <thead><tr><th>租户</th><th>目的 / 工单</th><th>状态</th><th>权限</th><th>发起 / 审批</th><th></th></tr></thead>
+              <thead><tr><th>{t('tenant')}</th><th>{t('thPurposeTicket')}</th><th>{t('status')}</th><th>{t('thPermission')}</th><th>{t('thRequestedApproved')}</th><th></th></tr></thead>
               <tbody>
                 {grants.map((g) => (
                   <tr key={g.id}>
                     <td><code className="mono">{g.tenant_id}</code></td>
                     <td>{g.purpose}<br /><span className="muted">{g.ticket}</span></td>
                     <td><span className={`badge ${GRANT_TONES[g.status] ?? 'badge-neutral'}`}>
-                      {g.status} · {GRANT_LABELS[g.status] ?? ''}
+                      {g.status} · {GRANT_KEYS[g.status] ? t(GRANT_KEYS[g.status]) : ''}
                     </span>
                       {g.session_expires_at && g.status === 'active' && (
-                        <div className="muted">到期 {new Date(g.session_expires_at).toLocaleTimeString('zh-CN', { hour12: false })}</div>
+                        <div className="muted">{t('expiresAtPrefix', { time: new Date(g.session_expires_at).toLocaleTimeString(langTag(lang), { hour12: false }) })}</div>
                       )}
                     </td>
                     <td>{g.permission}</td>
                     <td className="muted">
-                      {g.requested_by}{g.approved_by ? `（批准：${g.approved_by}）` : ''}<br />
-                      {new Date(g.created_at).toLocaleString('zh-CN', { hour12: false })}
+                      {g.requested_by}{g.approved_by ? ` ${t('approvedBySuffix', { by: g.approved_by })}` : ''}<br />
+                      {new Date(g.created_at).toLocaleString(langTag(lang), { hour12: false })}
                     </td>
                     <td>
                       {(g.status === 'approved' || g.status === 'active') && (
-                        <button className="btn btn-xs" onClick={() => void openSession(g)}>建立会话</button>
+                        <button className="btn btn-xs" onClick={() => void openSession(g)}>{t('btnOpenSession')}</button>
                       )}
                       {(g.status === 'requested' || g.status === 'approved' || g.status === 'active') && (
-                        <button className="btn btn-xs btn-danger" style={{ marginLeft: 6 }} onClick={() => void revoke(g)}>撤销</button>
+                        <button className="btn btn-xs btn-danger" style={{ marginLeft: 6 }} onClick={() => void revoke(g)}>{t('btnRevokeShort')}</button>
                       )}
                     </td>
                   </tr>
@@ -208,7 +211,7 @@ export default function SupportPage() {
               </tbody>
             </table>
           )}
-          {grants && grants.length === 0 && <p className="muted">还没有支持授权记录</p>}
+          {grants && grants.length === 0 && <p className="muted">{t('noGrantsYet')}</p>}
         </div>
       </div>
     </div>

@@ -116,13 +116,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return
       }
       try {
-        const me = await fetch('/ops/v1/me', { headers: { Authorization: `Bearer ${tok}` } }).catch(() => null)
-        // /ops/v1/me 是 ops 上下文；identity 会话用 memberships 端点验证即可
-        void me
+        // identity 会话用 memberships 端点验证（此前这里还多发一条 /ops/v1/me：
+        // identity 受众调 ops 端点注定 401，纯噪音，已删）。
         const res = await fetch('/v1/me/memberships', { headers: { Authorization: `Bearer ${tok}` } })
         if (!res.ok) throw new Error('session invalid')
         const data = (await res.json()) as { data: { items: Membership[] } }
         setMemberships(data.data.items)
+        // 身份资料从会话 claims 恢复（token 自描述）。此前不恢复 identityUser，
+        // 飞书回调整页刷新后 gate 判定未认证，永远弹回登录窗——登录链其实
+        // 已全部成功，只是内存资料丢了。
+        try {
+          const pad = (v: string) => v + '='.repeat((4 - (v.length % 4)) % 4)
+          const claims = JSON.parse(atob(pad(tok.split('.')[0] ?? '').replace(/-/g, '+').replace(/_/g, '/')))
+          // Go sessionClaims 序列化为首字母大写键（Sub/Login）；做大小写兼容
+          const sub = claims?.Sub ?? claims?.sub
+          const login = claims?.Login ?? claims?.login
+          if (sub) {
+            const name = typeof login === 'string' && login ? login : sub
+            setIdentityUser({ id: sub, login: name, display_name: name })
+          }
+        } catch { /* claims 不可解析不阻塞：memberships 已证明会话有效 */ }
         // active 租户仍有效？身份资料不持久化——重开页面只恢复租户上下文
         const act = sGet(ACTIVE_KEY)
         if (act) {
@@ -132,6 +145,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           } else {
             sSet(ACTIVE_KEY, null)
             sSet(TENANT_TOKEN_KEY, null)
+          }
+        } else if (data.data.items.length === 1) {
+          // 单租户用户自动进入：没有"选租户"的中间步骤，避免再次落回登录门
+          const only = data.data.items[0]
+          const tcRes = await fetch('/v1/session/tenant-context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+            body: JSON.stringify({ membership_id: only.membership_id }),
+          })
+          if (tcRes.ok) {
+            const tcData = (await tcRes.json()) as { data: { token: string; tenant_context: { tenant_id: string; role: string } } }
+            sSet(TENANT_TOKEN_KEY, tcData.data.token)
+            const restored: ActiveTenant = { tenantId: only.tenant_id, tenantName: only.tenant_name, role: tcData.data.tenant_context.role }
+            sSet(ACTIVE_KEY, JSON.stringify(restored))
+            setActive(restored)
           }
         }
         setIdentityToken(tok)
