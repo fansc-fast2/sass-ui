@@ -2,3 +2,4 @@ node_modules
 dist
 *.local
 tmp_emoji_hits.txt 
+*.log
